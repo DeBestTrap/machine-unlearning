@@ -1,0 +1,9 @@
+{
+  "nb_train": 50000,
+  "nb_test": 10000,
+  "input_shape": [
+    32, 32 
+  ],
+  "nb_classes": 10,
+  "dataloader": "dataloader"
+}

@@ -15,7 +15,10 @@ fi
 
 python distribution.py --shards "${shards}" --distribution uniform --container "${shards}" --dataset datasets/purchase/datasetfile --label 0
 
-for j in {1..15}; do
-    r=$((${j}*${shards}/5))
+# for j in {1..15}; do
+for j in {1..2}; do
+    # r=$((${j}*${shards}/5))
+    r=$((${j}))
+    echo "${r}"
     python distribution.py --requests "${r}" --distribution uniform --container "${shards}" --dataset datasets/purchase/datasetfile --label "${r}"
 done
