@@ -2,11 +2,14 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
+from pathlib import Path
+
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD  = (0.229, 0.224, 0.225)
 CIFAR_MEAN = (0.4914, 0.4822, 0.4465)
 CIFAR_STD  = (0.2470, 0.2430, 0.2610)
+
 
 def _make_tfms(image_size: int, train: bool):
     if train:
@@ -53,10 +56,10 @@ def select_numpy(ds, indices, *, use_transforms=False, channels_first=False):
 def get_cifar10(
     data_dir: str,
     image_size: int = 224,
-    download: bool = True,
 ):
+    download = not (Path(data_dir) / datasets.CIFAR10.base_folder).exists()
     train_set = datasets.CIFAR10(root=data_dir, train=True, transform=_make_tfms(image_size, True), download=download)
-    val_set = datasets.CIFAR10(root=data_dir, train=True, transform=_make_tfms(image_size, False), download=False)
+    val_set = datasets.CIFAR10(root=data_dir, train=True, transform=_make_tfms(image_size, False), download=download)
 
     # train_X = np.asarray(train_set.data)
     # train_y = np.asarray(train_set.targets)
