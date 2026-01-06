@@ -6,3 +6,4 @@ cifar-10-python.tar.gz
 datasets/purchase/2_kmeans.npy
 datasets/purchase/purchase2_test.npy
 datasets/purchase/purchase2_train.npy
+datasets/*/*.npz
