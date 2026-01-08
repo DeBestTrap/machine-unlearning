@@ -14,13 +14,14 @@ ul_reqs=$2
 datasetfile="datasets/sst2/datasetfile"
 model="roberta"
 slices=1
-epochs=1
+epochs=15
 batch_size=32
-lrs=(1e-7 1e-8 1e-9)
+lrs=(1e-3 1e-4 1e-5)
 optimizer="adamw"
 chkpt_interval=1
 predict_batch_size=32
 report_name="report-${model}"
+dropout_rate=0.1
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 for lr in "${lrs[@]}"; do
@@ -38,5 +39,6 @@ for lr in "${lrs[@]}"; do
         "${optimizer}" \
         "${chkpt_interval}" \
         "${predict_batch_size}" \
-        "${report_name}"
+        "${report_name}" \
+        "${dropout_rate}"
 done

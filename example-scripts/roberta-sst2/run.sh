@@ -14,13 +14,14 @@ ul_reqs=$2
 datasetfile="datasets/sst2/datasetfile"
 model="roberta"
 container_name="${shards}"
-slices=4
-epochs=15
+slices=1
+epochs=1
 batch_size=32
-learning_rate=0.00001
-optimizer="adam"
+learning_rate=1e-4
+optimizer="adamw"
 chkpt_interval=1
-predict_batch_size=16
+predict_batch_size=32
+dropout_rate=0.1
 report_name="report-${model}"
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -37,4 +38,5 @@ bash "${script_dir}/../common/run_all.sh" \
     "${optimizer}" \
     "${chkpt_interval}" \
     "${predict_batch_size}" \
-    "${report_name}"
+    "${report_name}" \
+    "${dropout_rate}"

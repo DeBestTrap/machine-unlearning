@@ -8,7 +8,7 @@ from transformers import AutoTokenizer
 pwd = os.path.dirname(os.path.realpath(__file__))
 
 MAX_LEN = 128
-TOKENIZER_NAME = "bert-base-uncased"
+TOKENIZER_NAME = "roberta-base"
 
 
 def _tokenize(batch, tokenizer):
