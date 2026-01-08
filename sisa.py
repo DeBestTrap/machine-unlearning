@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch.nn import CrossEntropyLoss
-from torch.optim import Adam, SGD
+from torch.optim import Adam, SGD, AdamW
 from torch.nn.functional import one_hot
 from sharded import sizeOfShard, getShardHash, fetchShardBatch, fetchTestBatch
 import os
@@ -101,6 +101,8 @@ if args.optimizer == "adam":
     optimizer = Adam(model.parameters(), lr=args.learning_rate)
 elif args.optimizer == "sgd":
     optimizer = SGD(model.parameters(), lr=args.learning_rate)
+elif args.optimizer == "adamw":
+    optimizer = AdamW(model.parameters(), lr=args.learning_rate)
 else:
     raise "Unsupported optimizer"
 

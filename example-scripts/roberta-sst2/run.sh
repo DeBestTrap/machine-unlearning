@@ -3,17 +3,22 @@
 set -eou pipefail
 IFS=$'\n\t'
 
+if [[ $# -lt 2 ]]; then
+    echo "Usage: $0 <shards> <ul_reqs>"
+    exit 1
+fi
+
 shards=$1
 ul_reqs=$2
 
-datasetfile="datasets/purchase/datasetfile"
-model="purchase"
+datasetfile="datasets/sst2/datasetfile"
+model="roberta"
 container_name="${shards}"
+slices=4
+epochs=15
 batch_size=32
-slices=32
-epochs=1
-learning_rate=0.001
-optimizer="sgd"
+learning_rate=0.00001
+optimizer="adam"
 chkpt_interval=1
 predict_batch_size=16
 

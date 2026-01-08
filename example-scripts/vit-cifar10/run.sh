@@ -3,19 +3,24 @@
 set -eou pipefail
 IFS=$'\n\t'
 
+if [[ $# -lt 2 ]]; then
+    echo "Usage: $0 <shards> <ul_reqs>"
+    exit 1
+fi
+
 shards=$1
 ul_reqs=$2
 
-datasetfile="datasets/purchase/datasetfile"
-model="purchase"
+datasetfile="datasets/cifar10/datasetfile"
+model="vit"
 container_name="${shards}"
-batch_size=32
-slices=32
+slices=1
 epochs=1
-learning_rate=0.001
-optimizer="sgd"
+batch_size=64
+learning_rate=0.00001
+optimizer="adamw"
 chkpt_interval=1
-predict_batch_size=16
+predict_batch_size=64
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 bash "${script_dir}/../common/init.sh" "${datasetfile}" "${shards}" "${ul_reqs}" "${container_name}"
