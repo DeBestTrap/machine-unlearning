@@ -13,7 +13,7 @@ ul_reqs=$2
 
 datasetfile="datasets/cifar10/datasetfile"
 model="vit"
-container_name="${shards}"
+container_name="${shards}-cc"
 slices=1
 epochs=1
 batch_size=64

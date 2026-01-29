@@ -35,6 +35,12 @@ parser.add_argument(
     help="Generate N unlearning requests and update requestfile",
 )
 parser.add_argument(
+    "--append_requests",
+    type=int,
+    default=None,
+    help="Append N new unlearning requests to a previous requestfile and save to --label",
+)
+parser.add_argument(
     "--distribution",
     default="uniform",
     help=(
@@ -58,6 +64,11 @@ parser.add_argument(
     "--label",
     default="latest",
     help="Label that distinguishes successive request files",
+)
+parser.add_argument(
+    "--prev_label",
+    default=None,
+    help="Label to append from when using --append_requests (defaults to label-1 if numeric)",
 )
 # Parameter used only by the PLS‑GAP branch (non‑uniform partitioning).
 parser.add_argument(
@@ -171,5 +182,46 @@ if args.requests is not None:
         for shard in range(nb_shards):
             new_requests.append(np.intersect1d(splitfile[shard], all_requests))
         new_requests = np.array(new_requests, dtype=object)
+
+    _save_object(container_dir / f"requestfile:{args.label}.npy", new_requests)
+
+# -----------------------------------------------------------------------------
+# --append_requests : append to previous request file
+# -----------------------------------------------------------------------------
+if args.append_requests is not None:
+    splitfile = np.load(container_dir / "splitfile.npy", allow_pickle=True)
+
+    if args.prev_label is None:
+        try:
+            prev_label = str(int(args.label) - 1)
+        except ValueError as exc:
+            raise ValueError("--prev_label is required when --label is not numeric") from exc
+    else:
+        prev_label = args.prev_label
+
+    prev_requests = np.load(
+        container_dir / f"requestfile:{prev_label}.npy", allow_pickle=True
+    )
+
+    requested = (
+        np.concatenate(prev_requests) if prev_requests.size else np.array([], dtype=int)
+    )
+    all_indices = np.concatenate(splitfile)
+    available = np.setdiff1d(all_indices, requested)
+
+    if available.size < args.append_requests:
+        raise ValueError("Not enough remaining indices to append requests.")
+
+    index_to_shard = {}
+    for shard_id, shard_indices in enumerate(splitfile):
+        for idx in shard_indices:
+            index_to_shard[int(idx)] = shard_id
+
+    new_requests = [np.array(r, dtype=int) for r in prev_requests]
+    for _ in range(args.append_requests):
+        new_idx = int(np.random.choice(available))
+        available = available[available != new_idx]
+        target_shard = index_to_shard[new_idx]
+        new_requests[target_shard] = np.append(new_requests[target_shard], new_idx)
 
     _save_object(container_dir / f"requestfile:{args.label}.npy", new_requests)

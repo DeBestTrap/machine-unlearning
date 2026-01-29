@@ -34,6 +34,6 @@ if ((ul_reqs >= 1)); then
     for j in $(seq 1 $((ul_reqs))); do
         r=$((${j}))
         echo "${r}"
-        python distribution.py --requests "${r}" --distribution uniform --container "${container_name}" --dataset "${dataset_path}" --label "${r}"
+        python distribution.py --append_requests 1 --distribution uniform --container "${container_name}" --dataset "${dataset_path}" --label "${r}" --prev_label "$((r - 1))"
     done
 fi
