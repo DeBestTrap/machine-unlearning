@@ -1,9 +1,12 @@
 {
-  "nb_train": 50000,
+  "nb_train": 47500,
   "nb_test": 10000,
   "input_shape": [
-    32, 32 
+    32,
+    32
   ],
   "nb_classes": 10,
-  "dataloader": "dataloader"
+  "dataloader": "dataloader",
+  "nb_val": 2500,
+  "split_manifest": "../../splits/cifar10-val2500-seed42.json"
 }

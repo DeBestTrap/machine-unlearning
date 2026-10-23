@@ -1,3 +1,4 @@
+from split_support import validate_container_split
 import numpy as np
 import torch
 from torch.nn import CrossEntropyLoss
@@ -6,6 +7,7 @@ from torch.nn.functional import one_hot
 from sharded import sizeOfShard, getShardHash, fetchShardBatch, fetchTestBatch
 import os
 from glob import glob
+from pathlib import Path
 from time import time
 import json
 
@@ -73,7 +75,9 @@ parser.add_argument(
     default="latest",
     help="Label to be used on simlinks and outputs, default latest",
 )
+parser.add_argument("--eval_split", choices=("test", "val"), default="test")
 args = parser.parse_args()
+validate_container_split(args.container, args.dataset)
 
 # Import the architecture.
 from importlib import import_module
@@ -181,6 +185,7 @@ if args.train:
 
             # Actual training.
             train_time = 0.0
+            print(f"start {start_epoch}, slice {slice_epochs}")
 
             for epoch in range(start_epoch, slice_epochs):
                 epoch_start_time = time()
@@ -258,6 +263,7 @@ if args.train:
                                 args.container, slice_hash, epoch - args.chkpt_interval
                             )
                         )
+            print(train_time)
 
             # When training is complete, save slice.
             torch.save(
@@ -338,7 +344,7 @@ if args.test:
 
     # Compute predictions batch per batch.
     outputs = np.empty((0, nb_classes))
-    for images, _ in fetchTestBatch(args.dataset, args.batch_size):
+    for images, _ in fetchTestBatch(args.dataset, args.batch_size, category=args.eval_split):
         # Convert data to torch format and send to selected device.
         gpu_images = torch.from_numpy(images).to(device)  # pylint: disable=no-member
 
@@ -361,9 +367,11 @@ if args.test:
 
     # Save outputs in numpy format.
     outputs = np.array(outputs)
+    output_dir = Path("containers") / args.container / "outputs"
+    if args.eval_split == "val":
+        output_dir /= "val"
+    output_dir.mkdir(parents=True, exist_ok=True)
     np.save(
-        "containers/{}/outputs/shard-{}:{}.npy".format(
-            args.container, args.shard, args.label
-        ),
+        output_dir / f"shard-{args.shard}:{args.label}.npy",
         outputs,
     )

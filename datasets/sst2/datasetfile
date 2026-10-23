@@ -1,9 +1,11 @@
 {
-  "nb_train": 67349,
+  "nb_train": 63982,
   "nb_test": 872,
   "input_shape": [
     128
   ],
   "nb_classes": 2,
-  "dataloader": "dataloader"
+  "dataloader": "dataloader",
+  "nb_val": 3367,
+  "split_manifest": "../../splits/glue-sst2-val3367-seed42.json"
 }

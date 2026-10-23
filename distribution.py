@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import List
 
 import numpy as np
+from split_support import bind_container_split, validate_container_split
 
 # -----------------------------------------------------------------------------
 # CLI
@@ -95,6 +96,7 @@ container_dir = _ensure_container()
 # --shards : build splitfile + empty request file
 # -----------------------------------------------------------------------------
 if args.shards is not None:
+    bind_container_split(args.container, args.dataset)
     nb_train = datasetfile["nb_train"]
 
     # Uniform split: just chunk the indices.
@@ -151,6 +153,7 @@ if args.shards is not None:
 # --requests : generate or reset unlearning requests
 # -----------------------------------------------------------------------------
 if args.requests is not None:
+    validate_container_split(args.container, args.dataset)
     splitfile = np.load(container_dir / "splitfile.npy", allow_pickle=True)
     nb_shards = len(splitfile)
 

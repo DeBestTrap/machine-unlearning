@@ -2,6 +2,9 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
+from pathlib import Path
+from split_support import configured_manifest
+from dataset_splits import fingerprint_cifar
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD  = (0.229, 0.224, 0.225)
@@ -51,10 +54,12 @@ def select_numpy(ds, indices, *, use_transforms=False, channels_first=False):
 def get_cifar10(
     data_dir: str,
     image_size: int = 224,
-    download: bool = True,
 ):
+    download = not (Path(data_dir) / datasets.CIFAR100.base_folder).exists()
     train_set = datasets.CIFAR100(root=data_dir, train=True, transform=_make_tfms(image_size, True), download=download)
-    val_set = datasets.CIFAR100(root=data_dir, train=True, transform=_make_tfms(image_size, False), download=False)
+    val_set = datasets.CIFAR100(root=data_dir, train=True, transform=_make_tfms(image_size, False), download=download)
+
+    test_set = datasets.CIFAR100(root=data_dir, train=False, transform=_make_tfms(image_size, False), download=download)
 
     # train_X = np.asarray(train_set.data)
     # train_y = np.asarray(train_set.targets)
@@ -63,17 +68,25 @@ def get_cifar10(
     # val_y = np.asarray(val_set.targets)
 
     # return train_X, train_y, val_X, val_y
-    return train_set, val_set
+    return train_set, val_set, test_set
 
 # train_X, train_y, val_X, val_y = get_cifar10(".")
-train_set, val_set = get_cifar10(".")
+train_set, val_set, test_set = get_cifar10(".")
+manifest = configured_manifest(
+    Path(__file__).with_name("datasetfile"),
+    dataset_id="cifar100", source_size=len(train_set),
+    source_sha256=fingerprint_cifar(train_set.data, train_set.targets),
+)
+train_indices = np.asarray(manifest["train_indices"], dtype=np.int64)
+val_indices = np.asarray(manifest["val_indices"], dtype=np.int64)
+
 
 def load(indices, category="train"):
-    # int_indices = indices.astype(np.int64)
-
+    indices = np.asarray(indices, dtype=np.int64)
     if category == "train":
-        # return train_X[int_indices], train_y[int_indices]
-        return select_numpy(train_set, indices, use_transforms=True)
-    else:
-        # return val_X[int_indices], val_y[int_indices]
-        return select_numpy(val_set, indices, use_transforms=True)
+        return select_numpy(train_set, train_indices[indices], use_transforms=True)
+    if category in ("val", "validation"):
+        return select_numpy(val_set, val_indices[indices], use_transforms=True)
+    if category == "test":
+        return select_numpy(test_set, indices, use_transforms=True)
+    raise ValueError(f"Unknown dataset category: {category}")

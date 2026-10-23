@@ -2,6 +2,7 @@ import numpy as np
 from hashlib import sha256
 import importlib
 import json
+from split_support import validate_container_split
 
 def sizeOfShard(container, shard):
     '''
@@ -40,6 +41,7 @@ def fetchShardBatch(container, label, shard, batch_size, dataset, offset=0, unti
     with specified batch_size from the specified dataset
     optionnally located between offset and until (slicing).
     '''
+    validate_container_split(container, dataset)
     shards = np.load('containers/{}/splitfile.npy'.format(container), allow_pickle=True)
     requests = np.load('containers/{}/requestfile:{}.npy'.format(container, label), allow_pickle=True)
     
@@ -58,7 +60,7 @@ def fetchShardBatch(container, label, shard, batch_size, dataset, offset=0, unti
         indices = np.setdiff1d(shards[shard][limit:until], requests[shard])
         yield dataloader.load(indices)
 
-def fetchTestBatch(dataset, batch_size):
+def fetchTestBatch(dataset, batch_size, category="test"):
     '''
     Generator returning batches of points from the specified test dataset
     with specified batch_size.
@@ -67,9 +69,12 @@ def fetchTestBatch(dataset, batch_size):
         datasetfile = json.loads(f.read())
     dataloader = importlib.import_module('.'.join(dataset.split('/')[:-1] + [datasetfile['dataloader']]))
 
+    if category not in ("test", "val"):
+        raise ValueError("Evaluation category must be test or val")
+    size = datasetfile[f"nb_{category}"]
     limit = 0
-    while limit <= datasetfile['nb_test'] - batch_size:
+    while limit <= size - batch_size:
         limit += batch_size
-        yield dataloader.load(np.arange(limit - batch_size, limit), category='test')
-    if limit < datasetfile['nb_test']:
-        yield dataloader.load(np.arange(limit, datasetfile['nb_test']), category='test')
+        yield dataloader.load(np.arange(limit - batch_size, limit), category=category)
+    if limit < size:
+        yield dataloader.load(np.arange(limit, size), category=category)

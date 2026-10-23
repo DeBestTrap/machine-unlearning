@@ -1,3 +1,4 @@
+from split_support import validate_container_split
 import numpy as np
 import json
 import os
@@ -20,7 +21,9 @@ parser.add_argument(
     "--baseline", type=int, help="Use only the specified shard (lone shard baseline)"
 )
 parser.add_argument("--label", default="latest", help="Label, default latest")
+parser.add_argument("--eval_split", choices=("test", "val"), default="test")
 args = parser.parse_args()
+validate_container_split(args.container, args.dataset)
 
 # Load dataset metadata.
 with open(args.dataset) as f:
@@ -40,7 +43,7 @@ outputs = []
 for filename in filenames:
     outputs.append(
         np.load(
-            os.path.join("containers/{}/outputs".format(args.container), filename),
+            os.path.join(os.path.join("containers", args.container, "outputs", "val" if args.eval_split == "val" else ""), filename),
             allow_pickle=True,
         )
     )
@@ -69,7 +72,7 @@ votes = np.argmax(
 )  # pylint: disable=unsubscriptable-object
 
 # Load labels.
-_, labels = dataloader.load(np.arange(datasetfile["nb_test"]), category="test")
+_, labels = dataloader.load(np.arange(datasetfile[f"nb_{args.eval_split}"]), category=args.eval_split)
 
 # Compute and print accuracy.
 accuracy = (
