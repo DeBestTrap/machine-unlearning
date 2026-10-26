@@ -9,3 +9,4 @@ datasets/purchase/purchase2_train.npy
 datasets/*/*.npz
 cifar-100-python/
 cifar-100-python.tar.gz
+runs/

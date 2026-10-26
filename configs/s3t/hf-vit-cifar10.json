@@ -1,0 +1,16 @@
+{
+  "dataset": "cifar10",
+  "model": "hf_vit",
+  "model_name": "google/vit-base-patch16-224-in21k",
+  "pretrained": true,
+  "shards": 5,
+  "slices": 6,
+  "budget": 6,
+  "layers_per_slice": 2,
+  "rank": 16,
+  "alpha": 32,
+  "lora_dropout": 0.1,
+  "epochs_per_slice": 15,
+  "batch_size": 64,
+  "learning_rate": 0.002
+}

@@ -1,0 +1,17 @@
+{
+  "dataset": "sst2",
+  "model": "roberta",
+  "model_name": "roberta-large",
+  "pretrained": true,
+  "shards": 5,
+  "slices": 7,
+  "budget": 7,
+  "layers_per_slice": 3,
+  "rank": 16,
+  "alpha": 32,
+  "lora_dropout": 0.01,
+  "epochs_per_slice": 10,
+  "batch_size": 32,
+  "eval_batch_size": 32,
+  "learning_rate": 0.00001
+}
