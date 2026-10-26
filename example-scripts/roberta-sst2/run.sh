@@ -11,11 +11,12 @@ fi
 shards=$1
 ul_reqs=$2
 
+export CUDA_VISIBLE_DEVICES=1
+
 datasetfile="datasets/sst2/datasetfile"
 model="roberta"
-container_name="${shards}"
 slices=4
-epochs=5
+epochs=2
 batch_size=32
 learning_rate=1e-5
 optimizer="adamw"
@@ -23,6 +24,7 @@ chkpt_interval=1
 predict_batch_size=32
 dropout_rate=0.1
 report_name="report-${model}"
+container_name="${model}-${shards}"
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 bash "${script_dir}/../common/run_all.sh" \

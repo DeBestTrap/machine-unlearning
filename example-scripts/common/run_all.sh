@@ -28,5 +28,6 @@ printf -v hparams '{"lr":%s,"batch_size":%s,"epochs":%s,"optimizer":"%s","slices
     "${learning_rate}" "${batch_size}" "${epochs}" "${optimizer}" "${slices}" "${chkpt_interval}"
 bash "${script_dir}/init.sh" "${dataset_path}" "${shards}" "${ul_reqs}" "${container_name}"
 bash "${script_dir}/train.sh" "${model}" "${dataset_path}" "${shards}" "${ul_reqs}" "${container_name}" "${slices}" "${epochs}" "${batch_size}" "${learning_rate}" "${optimizer}" "${chkpt_interval}" "${dropout_rate}"
+bash "${script_dir}/checkpoints_size.sh" "${container_name}"
 bash "${script_dir}/predict.sh" "${model}" "${dataset_path}" "${shards}" "${ul_reqs}" "${container_name}" "${predict_batch_size}"
 bash "${script_dir}/data.sh" "${dataset_path}" "${shards}" "${ul_reqs}" "${container_name}" "${report_name}" "${hparams}"

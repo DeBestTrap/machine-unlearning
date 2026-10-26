@@ -9,7 +9,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 ul_reqs=$1
-num_shards=(1 4 16)
+num_shards=(64 128 256)
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 for shards in "${num_shards[@]}"; do
