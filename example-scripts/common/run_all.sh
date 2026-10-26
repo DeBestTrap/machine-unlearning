@@ -27,6 +27,26 @@ script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 printf -v hparams '{"lr":%s,"batch_size":%s,"epochs":%s,"optimizer":"%s","slices":%s,"chkpt_interval":%s}' \
     "${learning_rate}" "${batch_size}" "${epochs}" "${optimizer}" "${slices}" "${chkpt_interval}"
 bash "${script_dir}/init.sh" "${dataset_path}" "${shards}" "${ul_reqs}" "${container_name}"
+python - "${container_name}" "${model}" "${dataset_path}" "${shards}" "${ul_reqs}" "${hparams}" "${predict_batch_size}" "${dropout_rate}" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+from container_storage import record_directory
+
+container, model, dataset, shards, steps, hparams, predict_batch_size, dropout = sys.argv[1:]
+config = {
+    "model": model,
+    "dataset": dataset,
+    "dataset_metadata": json.loads(Path(dataset).read_text()),
+    "shards": int(shards),
+    "deletion_steps": int(steps),
+    "hyperparams": json.loads(hparams),
+    "predict_batch_size": int(predict_batch_size),
+    "dropout_rate": float(dropout) if dropout else 0.4,
+}
+(record_directory(container) / "config.json").write_text(json.dumps(config, indent=2) + "\n")
+PY
 bash "${script_dir}/train.sh" "${model}" "${dataset_path}" "${shards}" "${ul_reqs}" "${container_name}" "${slices}" "${epochs}" "${batch_size}" "${learning_rate}" "${optimizer}" "${chkpt_interval}" "${dropout_rate}"
 bash "${script_dir}/checkpoints_size.sh" "${container_name}"
 bash "${script_dir}/predict.sh" "${model}" "${dataset_path}" "${shards}" "${ul_reqs}" "${container_name}" "${predict_batch_size}"

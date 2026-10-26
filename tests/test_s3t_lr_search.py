@@ -9,8 +9,8 @@ from s3t.lr_search import make_plan, run_search
 
 class LearningRateSearchTests(unittest.TestCase):
     def test_screening_plan_uses_bms_first_slice_and_intended_training_regime(self):
-        plan = make_plan(["cifar10", "sst2"], "cuda:0")
-        self.assertEqual(len(plan["trials"]), 6)
+        plan = make_plan(["cifar10", "cifar100", "sst2"], "cuda:0")
+        self.assertEqual(len(plan["trials"]), 9)
         for trial in plan["trials"]:
             config = Config.from_dict(trial["config"])
             self.assertEqual(config.head_policy, "first_slice")
@@ -20,7 +20,7 @@ class LearningRateSearchTests(unittest.TestCase):
             self.assertEqual(config.budget, 1)
             self.assertIsNone(config.max_train_examples)
             self.assertIsNone(config.max_eval_examples)
-            self.assertEqual(config.epochs_per_slice, 15 if config.dataset == "cifar10" else 10)
+            self.assertEqual(config.epochs_per_slice, 15 if config.dataset.startswith("cifar") else 10)
 
     def test_subprocess_queue_produces_validation_results_and_skips_completed_trials(self):
         with tempfile.TemporaryDirectory() as temporary:

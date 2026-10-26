@@ -18,6 +18,7 @@ from typing import List
 
 import numpy as np
 from split_support import bind_container_split, validate_container_split
+from container_storage import record_directory
 
 # -----------------------------------------------------------------------------
 # CLI
@@ -85,7 +86,7 @@ def _save_object(path: str | Path, data: List[np.ndarray] | np.ndarray) -> None:
 
 
 def _ensure_container() -> Path:
-    base = Path("containers") / args.container
+    base = record_directory(args.container)
     base.mkdir(parents=True, exist_ok=True)
     return base
 

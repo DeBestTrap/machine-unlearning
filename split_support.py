@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from dataset_splits import load_manifest
+from container_storage import record_directory
 
 
 def configured_manifest(dataset, **expected):
@@ -18,10 +19,11 @@ def configured_manifest(dataset, **expected):
 
 
 def validate_container_split(container, dataset):
+    directory = record_directory(container)
     manifest = configured_manifest(dataset)
     if manifest is None:
         return
-    path = Path('containers') / container / 'dataset_split.json'
+    path = directory / 'dataset_split.json'
     if not path.exists():
         raise ValueError('Container predates verified splits. Create a new container with distribution.py --shards.')
     recorded = json.loads(path.read_text())
@@ -30,10 +32,10 @@ def validate_container_split(container, dataset):
 
 
 def bind_container_split(container, dataset):
+    directory = record_directory(container)
     manifest = configured_manifest(dataset)
     if manifest is None:
         return
-    directory = Path('containers') / container
     if (directory / 'splitfile.npy').exists():
         validate_container_split(container, dataset)
     directory.mkdir(parents=True, exist_ok=True)

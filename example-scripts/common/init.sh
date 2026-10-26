@@ -13,18 +13,12 @@ shards=$2
 ul_reqs=$3
 container_name=$4
 
-if [[ ! -d "containers/${container_name}" ]] ; then
-    mkdir -p "containers/${container_name}"
-    mkdir "containers/${container_name}/cache"
-    mkdir "containers/${container_name}/times"
-    mkdir "containers/${container_name}/outputs"
-    echo 0 > "containers/${container_name}/times/null.time"
-fi
-
 if ((ul_reqs < 0)); then
     echo "Error can't be below 1"
     exit 1
 fi
+
+python container_storage.py init "${container_name}"
 
 echo "init.sh"
 
