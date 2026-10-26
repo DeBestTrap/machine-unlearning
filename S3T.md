@@ -22,6 +22,10 @@ python -m s3t smoke --output runs/s3t-smoke-roberta --model tiny_roberta --devic
 Smoke runs train real small transformers on generated data without downloading
 weights. They exercise checkpointing, prediction, and saved deletion replay.
 
+The default head policy is `first_slice`: train the classifier in the first
+stage, then freeze it for every later stage. `snapshot` remains an explicit
+alternative. Existing runs retain the head policy in their saved configuration.
+
 Run commands from this repository. Dataset/config paths inside a config resolve
 relative to this repository; CLI run/output paths resolve from the working
 directory. CIFAR archives must already be extracted in `data_root` (default `.`).
@@ -184,3 +188,35 @@ python -m s3t audit --run runs/s3t-c10
 The audit checks saved source identities, every surviving prefix's dependencies,
 head-snapshot availability, and sequence selections against the workload. It
 does not rerun training or constitute a statistical privacy audit.
+
+## Learning-rate screening
+
+The sequential screening runner uses `first_slice`, BMS with a uniform deletion
+prior, and the full shared validation pools. It trains one representative shard
+and one sequence per trial while retaining a five-shard/six-slice partition.
+Training length is 15 epochs per prefix for CIFAR-10 and 10 for SST-2. The grids
+are `[2e-4, 1e-3, 2e-3]` for CIFAR-10 and `[5e-6, 1e-5, 2e-5]` for SST-2.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+  python -u -m s3t.lr_search run --output runs/s3t-lr-screen --device cuda:0
+
+python -m s3t.lr_search status --output runs/s3t-lr-screen
+```
+
+Rerunning `run` resumes incomplete training and skips completed trials. A lock
+prevents two queue processes from training the same search. Stop the previous
+queue and its active worker before restarting an interrupted queue.
+
+The search directory contains a live `report.md`, `results.csv`, `status.json`,
+per-trial logs under `logs/`, and exact trial configs. Each completed trial has
+`pilot_result.json` with final-prefix validation accuracy and initialization,
+training, validation, and total wall times. The test pool is not scored. The
+remaining-time estimate extrapolates observed epoch times by cumulative-prefix
+size and transformer depth; initial estimates use earlier local verification
+runs when available.
+
+These are single-member screening scores. Confirm promising learning rates with
+the intended full ensemble and additional seeds before reporting final results.
+BMS runs its matching procedure here; uniform priors do not test its advantage
+from knowing nonuniform deletion probabilities.

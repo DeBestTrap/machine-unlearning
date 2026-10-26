@@ -19,7 +19,7 @@ single-checkpoint deletion description. The public classification scripts train
 the head at multiple stages. Keeping the last such head after disabling later
 adapters would retain a dependency on later data.
 
-**Default decision: `head_policy="snapshot"`.** Train the head at every stage,
+**Optional policy: `head_policy="snapshot"`.** Train the head at every stage,
 initialize it from the preceding stage's head, and preserve its state after each
 stage. Serving prefix `k` activates only adapter groups `<k` and restores head
 snapshot `k-1`. All adapter groups and head snapshots live in one sequence
@@ -27,9 +27,11 @@ checkpoint; the full backbone is stored only once per run. This adds head-state
 storage, which is included in reported checkpoint size. It is an explicit
 implementation choice, not a claim that the authors used this policy.
 
-**Alternative: `head_policy="first_slice"`.** Train the head only at stage zero
+**Default decision: `head_policy="first_slice"`.** Train the head only at stage zero
 and freeze it afterward. Surviving prefixes then use that same head. This keeps
-the head dependent only on the first slice, at a potential accuracy cost.
+the head dependent only on the first slice, at a potential accuracy cost. This
+became the default at the user's request; earlier validation runs explicitly
+recorded `snapshot` in their saved configurations.
 
 A prefix of length zero is never included in an ensemble. If deletion touches
 the earliest slice in a sequence, that sequence has no usable trained prefix.

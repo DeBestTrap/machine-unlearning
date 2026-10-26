@@ -93,7 +93,9 @@ class AdapterTests(unittest.TestCase):
         self._prefix_restoration("tiny_roberta", "snapshot")
 
     def test_first_slice_head_remains_frozen(self):
-        self._prefix_restoration("tiny_vit", "first_slice")
+        for model in ("tiny_vit", "tiny_roberta"):
+            with self.subTest(model=model):
+                self._prefix_restoration(model, "first_slice")
 
     def test_huggingface_vit_adapter_injection(self):
         from transformers import ViTConfig, ViTForImageClassification

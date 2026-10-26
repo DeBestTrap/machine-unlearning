@@ -11,7 +11,7 @@
   "alpha": 32,
   "scaling": "lora",
   "lora_dropout": 0.1,
-  "head_policy": "snapshot",
+  "head_policy": "first_slice",
   "epochs_per_slice": 15,
   "batch_size": 64,
   "learning_rate": 0.002,

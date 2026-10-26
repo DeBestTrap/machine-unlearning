@@ -30,7 +30,7 @@ class Config:
     alpha: float = 32.0
     scaling: str = "lora"
     lora_dropout: float = 0.1
-    head_policy: str = "snapshot"
+    head_policy: str = "first_slice"
     epochs_per_slice: int = 15
     batch_size: int = 64
     eval_batch_size: int = 128

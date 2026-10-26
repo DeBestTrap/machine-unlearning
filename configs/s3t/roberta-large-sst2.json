@@ -9,6 +9,7 @@
   "layers_per_slice": 3,
   "rank": 16,
   "alpha": 32,
+  "head_policy": "first_slice",
   "lora_dropout": 0.01,
   "epochs_per_slice": 10,
   "batch_size": 32,
