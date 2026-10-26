@@ -14,7 +14,7 @@ ul_reqs=$3
 container_name=$4
 
 if [[ ! -d "containers/${container_name}" ]] ; then
-    mkdir "containers/${container_name}"
+    mkdir -p "containers/${container_name}"
     mkdir "containers/${container_name}/cache"
     mkdir "containers/${container_name}/times"
     mkdir "containers/${container_name}/outputs"
@@ -27,6 +27,13 @@ if ((ul_reqs < 0)); then
 fi
 
 echo "init.sh"
+
+if [[ -n "${DELETION_REQUEST_MANIFEST:-}" ]]; then
+    # In shared mode ul_reqs counts batches/steps, including for batched deletions.
+    python -c 'import json, sys; n = len(json.load(open(sys.argv[1]))["batches"]); sys.exit(0 if n == int(sys.argv[2]) else "ul_reqs must equal the shared manifest batch count")' "${DELETION_REQUEST_MANIFEST}" "${ul_reqs}"
+    python distribution.py --shards "${shards}" --distribution uniform --container "${container_name}" --dataset "${dataset_path}" --label 0 --request-manifest "${DELETION_REQUEST_MANIFEST}"
+    exit 0
+fi
 
 python distribution.py --shards "${shards}" --distribution uniform --container "${container_name}" --dataset "${dataset_path}" --label 0
 

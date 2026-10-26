@@ -39,6 +39,11 @@ Code for ProtoSISA, S3T, or other methods can use `configured_manifest(datasetfi
 
 Local positions map to original examples through the saved index list. For example, `manifest['train_indices'][local_training_index]` identifies an original source example. Matching deletion requests across methods requires sharing those source identities separately from the train/validation split.
 
+Use `distribution.py --request-manifest` or `DELETION_REQUEST_MANIFEST` with the
+common initialization scripts to replay the same deletion batches as BlockUnlearn.
+See [Shared deletion requests](DELETIONS.md) for saved workloads, cumulative-label
+semantics, and the cross-repository audit command.
+
 Run the offline checks with:
 
 ```bash

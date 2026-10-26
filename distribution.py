@@ -36,6 +36,10 @@ parser.add_argument(
     help="Generate N unlearning requests and update requestfile",
 )
 parser.add_argument(
+    "--request-manifest",
+    help="Replay a shared deletion JSON as cumulative labels 0..N; replaces random request generation",
+)
+parser.add_argument(
     "--distribution",
     default="uniform",
     help=(
@@ -67,6 +71,8 @@ parser.add_argument(
     help="PLS‑GAP parameter as algo:limit_fraction (default gap:0.01)",
 )
 args = parser.parse_args()
+if args.request_manifest and args.requests is not None:
+    parser.error("--request-manifest cannot be combined with --requests")
 
 # -----------------------------------------------------------------------------
 # Helpers
@@ -96,6 +102,8 @@ container_dir = _ensure_container()
 # --shards : build splitfile + empty request file
 # -----------------------------------------------------------------------------
 if args.shards is not None:
+    if (container_dir / "deletion_requests.json").exists():
+        raise ValueError("Shared deletion container is already initialized; omit --shards or use a new container")
     bind_container_split(args.container, args.dataset)
     nb_train = datasetfile["nb_train"]
 
@@ -153,6 +161,8 @@ if args.shards is not None:
 # --requests : generate or reset unlearning requests
 # -----------------------------------------------------------------------------
 if args.requests is not None:
+    if (container_dir / "deletion_requests.json").exists():
+        raise ValueError("Container uses shared deletions; use --request-manifest or a new container")
     validate_container_split(args.container, args.dataset)
     splitfile = np.load(container_dir / "splitfile.npy", allow_pickle=True)
     nb_shards = len(splitfile)
@@ -176,3 +186,10 @@ if args.requests is not None:
         new_requests = np.array(new_requests, dtype=object)
 
     _save_object(container_dir / f"requestfile:{args.label}.npy", new_requests)
+
+if args.request_manifest:
+    from deletion_support import export_deletion_requests
+    workload = export_deletion_requests(args.container, args.dataset, args.request_manifest)
+    print(json.dumps(dict(workload_sha256=workload["workload_sha256"],
+                          steps=len(workload["batches"]),
+                          unique_deletions=sum(map(len, workload["batches"])))))
