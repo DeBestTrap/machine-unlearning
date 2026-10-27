@@ -20,6 +20,7 @@ from .partition import Partition, digest
 
 
 GRIDS = {"cifar10": ("vit-cifar10.json", [0.0002, 0.001, 0.002]),
+         "cifar100": ("vit-cifar100.json", [0.0002, 0.001, 0.002]),
          "sst2": ("roberta-sst2.json", [0.000005, 0.00001, 0.00002])}
 
 
@@ -71,7 +72,9 @@ def run_trial(config_path, directory, device):
 
 def _reference_unit_seconds(dataset):
     # An initial estimate from earlier runs of the same local backbones/batches.
-    name = {"cifar10": "vit-cifar10-full-pool", "sst2": "roberta-sst2-full-pool"}.get(dataset)
+    # CIFAR-100 initially uses the same ViT/input-size timing reference as CIFAR-10.
+    name = {"cifar10": "vit-cifar10-full-pool", "cifar100": "vit-cifar10-full-pool",
+            "sst2": "roberta-sst2-full-pool"}.get(dataset)
     if name is None:
         return None
     root = ROOT / "runs/s3t-validation" / name
@@ -125,7 +128,7 @@ def summarize(directory, plan, state):
                 partition = Partition.from_dict(read_json(partition_path))
                 sizes = [len(partition.training_ids(0, 0, prefix)) for prefix in range(1, config["slices"] + 1)]
             else:
-                full_size = {"cifar10": 47500, "sst2": 63982, "synthetic": 78}[trial["dataset"]]
+                full_size = {"cifar10": 47500, "cifar100": 47500, "sst2": 63982, "synthetic": 78}[trial["dataset"]]
                 shard_size = (full_size + config["shards"] - 1) // config["shards"]
                 sizes = [shard_size * prefix / config["slices"] for prefix in range(1, config["slices"] + 1)]
             units = [epoch["seconds"] / (epoch["examples"] * (1 + (epoch["stage"] + 1) / config["slices"]))
@@ -233,7 +236,7 @@ def main(argv=None):
     run = sub.add_parser("run")
     run.add_argument("--output", required=True)
     run.add_argument("--device", default="cuda:0")
-    run.add_argument("--datasets", nargs="+", choices=tuple(GRIDS), default=list(GRIDS))
+    run.add_argument("--datasets", nargs="+", choices=tuple(GRIDS), default=["cifar10", "sst2"])
     worker = sub.add_parser("worker")
     worker.add_argument("--config", required=True)
     worker.add_argument("--output", required=True)

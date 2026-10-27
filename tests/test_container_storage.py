@@ -94,7 +94,7 @@ class ContainerStorageTests(unittest.TestCase):
 
     def test_real_training_reporting_and_reporting_again_after_cleanup(self):
         Path("saved_models").symlink_to(self.external, target_is_directory=True)
-        for name in ("sisa.py", "distribution.py", "aggregation.py", "time.py", "container_storage.py"):
+        for name in ("sisa.py", "distribution.py", "aggregation.py", "time.py", "container_storage.py", "sisa_timing.py"):
             Path(name).symlink_to(ROOT / name)
         fixture = Path("fixture_data")
         fixture.mkdir()

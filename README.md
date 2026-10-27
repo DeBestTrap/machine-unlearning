@@ -39,6 +39,8 @@ The common experiment scripts retain:
 
 Use a new container name for each experiment you want to retain separately.
 The usual combined `report-*.csv` files are still written as before.
+New reports include complete update timings compatible with BlockUnlearn's
+`update_v1` measurements. See [timing boundaries and historical results](TIMING.md).
 
 To delete saved models while keeping run data:
 

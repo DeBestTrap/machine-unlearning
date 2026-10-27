@@ -195,7 +195,9 @@ The sequential screening runner uses `first_slice`, BMS with a uniform deletion
 prior, and the full shared validation pools. It trains one representative shard
 and one sequence per trial while retaining a five-shard/six-slice partition.
 Training length is 15 epochs per prefix for CIFAR-10 and 10 for SST-2. The grids
-are `[2e-4, 1e-3, 2e-3]` for CIFAR-10 and `[5e-6, 1e-5, 2e-5]` for SST-2.
+are `[2e-4, 1e-3, 2e-3]` for CIFAR-10/CIFAR-100 and `[5e-6, 1e-5, 2e-5]` for SST-2.
+The default dataset list is CIFAR-10 and SST-2. Add `--datasets cifar100` to run
+only the CIFAR-100 search, or name all three datasets explicitly.
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
