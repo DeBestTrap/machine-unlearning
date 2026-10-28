@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 from s3t.config import Config
-from s3t.lr_search import make_plan, run_search
+from studies.s3t_lr_screening.run import make_plan, run_search
 
 
 class LearningRateSearchTests(unittest.TestCase):

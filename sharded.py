@@ -1,14 +1,16 @@
 import numpy as np
 from hashlib import sha256
-import importlib
+import importlib  # Keep the import hook used by cross-repo deletion replay audits.
 import json
+from dataset_loading import load_dataset_module
 from split_support import validate_container_split
+from container_storage import record_directory
 
 def sizeOfShard(container, shard):
     '''
     Returns the size (in number of points) of the shard before any unlearning request.
     '''
-    shards = np.load('containers/{}/splitfile.npy'.format(container), allow_pickle=True)
+    shards = np.load(record_directory(container) / 'splitfile.npy', allow_pickle=True)
     
     return shards[shard].shape[0]
 
@@ -16,8 +18,8 @@ def realSizeOfShard(container, label, shard):
     '''
     Returns the actual size of the shard (including unlearning requests).
     '''
-    shards = np.load('containers/{}/splitfile.npy'.format(container), allow_pickle=True)
-    requests = np.load('containers/{}/requestfile:{}.npy'.format(container, label), allow_pickle=True)
+    shards = np.load(record_directory(container) / 'splitfile.npy', allow_pickle=True)
+    requests = np.load(record_directory(container) / f'requestfile:{label}.npy', allow_pickle=True)
     
     return shards[shard].shape[0] - requests[shard].shape[0]
 
@@ -26,8 +28,8 @@ def getShardHash(container, label, shard, until=None):
     Returns a hash of the indices of the points in the shard lower than until
     that are not in the requests (separated by :).
     '''
-    shards = np.load('containers/{}/splitfile.npy'.format(container), allow_pickle=True)
-    requests = np.load('containers/{}/requestfile:{}.npy'.format(container, label), allow_pickle=True)
+    shards = np.load(record_directory(container) / 'splitfile.npy', allow_pickle=True)
+    requests = np.load(record_directory(container) / f'requestfile:{label}.npy', allow_pickle=True)
 
     if until == None:
         until = shards[shard].shape[0]
@@ -42,12 +44,12 @@ def fetchShardBatch(container, label, shard, batch_size, dataset, offset=0, unti
     optionnally located between offset and until (slicing).
     '''
     validate_container_split(container, dataset)
-    shards = np.load('containers/{}/splitfile.npy'.format(container), allow_pickle=True)
-    requests = np.load('containers/{}/requestfile:{}.npy'.format(container, label), allow_pickle=True)
+    shards = np.load(record_directory(container) / 'splitfile.npy', allow_pickle=True)
+    requests = np.load(record_directory(container) / f'requestfile:{label}.npy', allow_pickle=True)
     
     with open(dataset) as f:
         datasetfile = json.loads(f.read())
-    dataloader = importlib.import_module('.'.join(dataset.split('/')[:-1] + [datasetfile['dataloader']]))
+    dataloader = load_dataset_module(dataset, datasetfile)
     if until == None or until > shards[shard].shape[0]:
         until = shards[shard].shape[0]
 
@@ -67,7 +69,7 @@ def fetchTestBatch(dataset, batch_size, category="test"):
     '''
     with open(dataset) as f:
         datasetfile = json.loads(f.read())
-    dataloader = importlib.import_module('.'.join(dataset.split('/')[:-1] + [datasetfile['dataloader']]))
+    dataloader = load_dataset_module(dataset, datasetfile)
 
     if category not in ("test", "val"):
         raise ValueError("Evaluation category must be test or val")

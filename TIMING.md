@@ -16,7 +16,7 @@ and epoch boundaries, without adding synchronization to every minibatch.
 
 ## SISA
 
-`sisa.py --train` saves local `containers/<run>/times/shard-<i>:<label>.json`
+`sisa.py --train` saves local `studies/<study>/runs/<run>/<trial>/times/shard-<i>:<label>.json`
 records containing `update_time_sec`, `training_time_sec`, and a breakdown of the
 slices actually trained or reused. Training time covers epoch loops, including
 batch loading and transfers; update time additionally covers planning, checkpoint
@@ -39,7 +39,7 @@ the last completed checkpoint epoch. A hard kill can lose an unrecorded timing
 interval, so that measurement is marked incomplete and cannot be exported as a
 complete update. Use a new container to obtain a fresh measurement in that case.
 
-`python time.py --container <run> --label 1` prints the sum and shard mean of these
+`python time.py --container studies/<study>/runs/<run>/<trial> --label 1` prints the sum and shard mean of these
 complete update timings. Predictions, timing JSON, and reports remain local after
 model cleanup, allowing reports to be regenerated without checkpoints.
 

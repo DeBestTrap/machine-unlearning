@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from deletion_requests import load_workload, local_batches
+from container_storage import record_directory
 from split_support import configured_manifest, validate_container_split
 
 
@@ -15,7 +16,7 @@ def export_deletion_requests(container, dataset, workload_path):
         raise ValueError("Shared deletions require a verified dataset split manifest")
     workload = load_workload(workload_path, split)
     batches = local_batches(workload, split)
-    directory = Path("containers") / container
+    directory = record_directory(container)
     shards = np.load(directory / "splitfile.npy", allow_pickle=True)
     flattened = [int(idx) for shard in shards for idx in shard]
     if sorted(flattened) != list(range(len(split["train_indices"]))):

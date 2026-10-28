@@ -5,7 +5,7 @@ from torch.nn import CrossEntropyLoss
 from torch.optim import Adam, SGD, AdamW
 from torch.nn.functional import one_hot
 from sharded import fetchTestBatch
-from pathlib import Path
+from container_storage import record_directory
 import json
 
 import argparse
@@ -50,7 +50,7 @@ parser.add_argument(
     help="Type of outputs to be used in aggregation, can be either argmax or softmax, default argmax",
 )
 
-parser.add_argument("--container", help="Name of the container")
+parser.add_argument("--container", help="Study record directory or standalone container name")
 parser.add_argument("--shard", type=int, help="Index of the shard to train/test")
 parser.add_argument(
     "--slices", default=1, type=int, help="Number of slices to use, default 1"
@@ -75,6 +75,10 @@ parser.add_argument(
 parser.add_argument("--eval_split", choices=("test", "val"), default="test")
 args = parser.parse_args()
 validate_container_split(args.container, args.dataset)
+directory = record_directory(args.container)
+if args.train:
+    from studies.artifacts import verify_run_source
+    verify_run_source(directory)
 
 # Import the architecture.
 from importlib import import_module
@@ -116,9 +120,7 @@ if args.test:
     # Load model weights from shard checkpoint (last slice).
     model.load_state_dict(
         torch.load(
-            "containers/{}/cache/shard-{}:{}.pt".format(
-                args.container, args.shard, args.label
-            )
+            directory / "cache" / f"shard-{args.shard}:{args.label}.pt"
         )
     )
 
@@ -147,7 +149,7 @@ if args.test:
 
     # Save outputs in numpy format.
     outputs = np.array(outputs)
-    output_dir = Path("containers") / args.container / "outputs"
+    output_dir = directory / "outputs"
     if args.eval_split == "val":
         output_dir /= "val"
     output_dir.mkdir(parents=True, exist_ok=True)

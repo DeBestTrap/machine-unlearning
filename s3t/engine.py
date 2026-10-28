@@ -196,6 +196,8 @@ class Run:
 
     def train(self, device="auto", shard=None, sequence=None, *, max_epochs=None):
         """Resume at an epoch boundary. max_epochs is a bounded-run/testing hook."""
+        from studies.artifacts import verify_run_source
+        verify_run_source(self.directory)
         if max_epochs is not None and (type(max_epochs) is not int or max_epochs < 1):
             raise ValueError("max_epochs must be a positive integer or None")
         device = choose_device(device)
@@ -442,6 +444,8 @@ class Run:
         return result
 
     def delete(self, source_ids, *, workload_sha256=None):
+        from studies.artifacts import verify_run_source
+        verify_run_source(self.directory)
         with lock(self.directory / ".lifecycle.lock"):
             state = self.state()
             self.require_complete(state["generation"])
@@ -475,6 +479,8 @@ class Run:
 
     def replay(self, workload_path, device="auto", split="test", *, steps=None, cache=True,
                on_exhaustion="stop"):
+        from studies.artifacts import verify_run_source
+        verify_run_source(self.directory)
         if on_exhaustion not in ("stop", "continue", "retrain"):
             raise ValueError("Invalid on_exhaustion policy")
         workload = load_workload(workload_path, self.split)
@@ -525,6 +531,8 @@ class Run:
 
     def retrain(self, device="auto", *, max_epochs=None):
         """Start/resume a new generation on all retained examples, then publish it."""
+        from studies.artifacts import verify_run_source
+        verify_run_source(self.directory)
         if max_epochs is not None and (type(max_epochs) is not int or max_epochs < 1):
             raise ValueError("max_epochs must be a positive integer or None")
         with lock(self.directory / ".lifecycle.lock"):

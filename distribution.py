@@ -53,7 +53,7 @@ parser.add_argument(
 parser.add_argument(
     "--container",
     default="default",
-    help="Name of the experiment container (folder under ./containers/)",
+    help="Study record directory or standalone container name",
 )
 parser.add_argument(
     "--dataset",

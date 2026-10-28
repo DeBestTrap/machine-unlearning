@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "name": "quick25",
+  "steps": 25,
+  "points_per_step": 1,
+  "training_seed": 1,
+  "epochs": 1,
+  "sisa": {
+    "shards": 5,
+    "slices": 4
+  },
+  "datasets": {
+    "cifar10": {
+      "split": "cifar10-val2500-seed42.json",
+      "split_sha256": "99c4740083af728290cde16d85fc1a56c3461a135771335ff2b602cd6bb8e904",
+      "workload": "cifar10-seed123-25x1.json",
+      "workload_sha256": "1ba2765b82d3e39ba2e8c7f10c8d1fdfd375b9293f5e9aa1fd1cd38d26fc52fe",
+      "fcm": {
+        "config": "atransfer/fcm_selected_lambda_ul/vit_c10_base.yml",
+        "lambda": 0.5,
+        "num_blocks": [
+          50,
+          1,
+          1
+        ]
+      },
+      "fc": {
+        "config": "atransfer/fc_wide_selected_ul/cifar10/configs/19-1-2-3.yml",
+        "allocation_input_to_output": "19-1-2-3"
+      },
+      "sisa_dataset": "datasets/cifar10/datasetfile",
+      "sisa_model": "vit",
+      "batch_size": 64,
+      "learning_rate": 0.0001,
+      "s3t_config": "configs/s3t/vit-cifar10.json"
+    },
+    "cifar100": {
+      "split": "cifar100-val2500-seed42.json",
+      "split_sha256": "20e5ddf62c0761a010bd7813685bb89325345ea7e8561920eda6c1aef31a453f",
+      "workload": "cifar100-seed123-25x1.json",
+      "workload_sha256": "6bfbc32202b9d0009cec8d57dc7b6d7b744a851e081cd3bee325bcab416c815e",
+      "fcm": {
+        "config": "atransfer/fcm_selected_lambda_ul/vit_c100_base.yml",
+        "lambda": 0.5,
+        "num_blocks": [
+          1,
+          20,
+          1
+        ]
+      },
+      "fc": {
+        "config": "atransfer/fc_wide_selected_ul/cifar100/configs/18-1-1-5.yml",
+        "allocation_input_to_output": "18-1-1-5"
+      },
+      "sisa_dataset": "datasets/cifar100/datasetfile",
+      "sisa_model": "vit",
+      "batch_size": 32,
+      "learning_rate": 0.0001,
+      "s3t_config": "configs/s3t/vit-cifar100.json"
+    },
+    "sst2": {
+      "split": "glue-sst2-val3367-seed42.json",
+      "split_sha256": "827a22178fee602a0b0e7718ae3a7593fa4c30a2af59bf847e675b9b50f8acaf",
+      "workload": "glue-sst2-seed123-25x1.json",
+      "workload_sha256": "32f102f17da9bfb494baaf520283c85e6edb4fe9455db688f091eec8cb800d3a",
+      "fcm": {
+        "config": "atransfer/fcm_selected_lambda_ul/roberta_sst2_base.yml",
+        "lambda": 0.5,
+        "num_blocks": [
+          50,
+          1,
+          1
+        ]
+      },
+      "fc": {
+        "config": "atransfer/fc_wide_selected_ul/sst2/configs/17-1-1-6.yml",
+        "allocation_input_to_output": "17-1-1-6"
+      },
+      "sisa_dataset": "datasets/sst2/datasetfile",
+      "sisa_model": "roberta",
+      "batch_size": 32,
+      "learning_rate": 1e-05,
+      "s3t_config": "configs/s3t/roberta-sst2.json"
+    }
+  }
+}

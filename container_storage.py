@@ -11,24 +11,41 @@ import tempfile
 
 
 def record_directory(container):
-    if not container or container in (".", "..") or Path(container).name != container:
-        raise ValueError("Container must be a single directory name")
+    if not container or str(container) in (".", ".."):
+        raise ValueError("Supply a container name or a study run directory")
+    container = str(container)
+    path = Path(container)
+    if path.name != container:
+        directory = path.absolute()
+        roots = {Path.cwd(), Path(__file__).resolve().parent}
+        if not any(not (root / "studies").is_symlink()
+                   and directory.resolve().is_relative_to(root / "studies") for root in roots):
+            raise ValueError("Explicit run directories must be local study paths")
+        if directory.is_symlink():
+            raise ValueError("Use the study run directory directly, without a container link")
+        return directory
     root = Path("containers")
     if root.is_symlink():
         raise ValueError("containers/ still points to model storage; run python container_storage.py separate first")
     directory = root / container
     if directory.is_symlink():
-        raise ValueError(f"Run records must be local: {directory} is a symlink")
+        raise ValueError(f"Run records must be local: use the canonical directory instead of {directory}")
     return directory
 
 
 def initialize_container(container):
     directory = record_directory(container)
-    target = (Path("saved_models") / container / "cache").absolute()
+    root = next((root for root in (Path.cwd(), Path(__file__).resolve().parent)
+                 if directory.absolute().is_relative_to(root / "studies")), Path.cwd())
+    model_root = root / "saved_models"
+    relative = directory.absolute().relative_to(root)
+    model_key = Path(str(container)) if relative.parts[0] == "containers" else relative
+    target = model_root / model_key / "cache"
     cache = directory / "cache"
     if cache.is_symlink():
-        if cache.resolve() != target.resolve():
+        if not cache.resolve().is_relative_to(model_root.resolve()):
             raise ValueError(f"Checkpoint cache points to a different model store: {cache}")
+        target = cache.resolve()
     elif cache.exists():
         raise ValueError(f"Checkpoint cache is still a local directory: {cache}")
     if target.resolve().is_relative_to(Path("containers").resolve()):
@@ -36,7 +53,7 @@ def initialize_container(container):
     target.mkdir(parents=True, exist_ok=True)
     directory.mkdir(parents=True, exist_ok=True)
     if not cache.is_symlink():
-        cache.symlink_to(os.path.relpath(target, directory), target_is_directory=True)
+        cache.symlink_to(os.path.relpath(target, directory.resolve()), target_is_directory=True)
     for name in ("times", "outputs"):
         (directory / name).mkdir(exist_ok=True)
     null_time = directory / "times/null.time"
@@ -118,6 +135,15 @@ def clear_models(containers):
     return removed
 
 
+def saved_record_directories():
+    """Find current SISA records without creating or following old path aliases."""
+    records = [path for path in Path("containers").glob("*") if path.is_dir() and not path.is_symlink()]
+    for cache in Path("studies").glob("*/runs/**/cache"):
+        if (cache.parent / "splitfile.npy").is_file():
+            records.append(cache.parent.absolute())
+    return sorted(set(records))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -126,7 +152,7 @@ def main():
         command = commands.add_parser(name)
         command.add_argument("container")
     command = commands.add_parser("clear-models", help="Remove checkpoints, preserving all local run records")
-    command.add_argument("containers", nargs="*", help="Container names; omit to clear models for all local containers")
+    command.add_argument("containers", nargs="*", help="Study record directories or standalone container names; omit for all SISA runs")
     args = parser.parse_args()
     if args.command == "separate":
         separate_storage()
@@ -140,8 +166,8 @@ def main():
     else:
         # Check the root before enumerating it, including when it is empty.
         record_directory("validation")
-        containers = args.containers or sorted(path.name for path in Path("containers").iterdir() if path.is_dir())
-        print(f"Removed {clear_models(containers)} checkpoint files/links; retained run records in containers/")
+        containers = args.containers or [str(path) if path.is_absolute() else path.name for path in saved_record_directories()]
+        print(f"Removed {clear_models(containers)} checkpoint files/links; retained all run records")
 
 
 if __name__ == "__main__":

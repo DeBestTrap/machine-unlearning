@@ -12,3 +12,7 @@ datasets/*/*.npz
 cifar-100-python/
 cifar-100-python.tar.gz
 runs/
+studies/.migration/
+/report-*.csv
+/r-vit.csv
+/studies/*/reports/*/

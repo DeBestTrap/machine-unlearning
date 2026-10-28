@@ -1,3 +1,28 @@
+# S3T validation study
+
+Saved results are collected in the [report index](reports/README.md), alongside
+the study’s `run.sh` / `run.py` entry points.
+
+This study groups the original implementation checks and provides a fresh-run
+launcher for the full-pool validation protocol:
+
+```bash
+bash studies/2026-10-26_0948_s3t_validation/run.sh --dry-run --tag validation_v2
+bash studies/2026-10-26_0948_s3t_validation/run.sh --device cuda:0 --tag validation_v2
+```
+
+The launcher trains the two-shard/two-slice/two-sequence CIFAR-10 and SST-2
+checks, replays all 100 shared deletions with `continue`, and audits the saved
+state. `--datasets cifar10` selects one dataset. Each fresh run retains its launch
+source/settings, engine configs, and outputs under this study's `runs/<tag>/`.
+Historical snapshots are preserved in `runs/validation_20261026/`; their
+current-code compatibility is unverified, so use a new tag for new training.
+
+The fixed completion prefix uses the original `unit-tests.log` modification
+time, October 26, 2026 at 09:48 America/New_York. It does not date the migration
+or every future run. The original validation report follows, with artifact links
+updated to their canonical study locations; its reported results are unchanged.
+
 # S3T validation — 2026-10-26
 
 The implementation passed **36 tests** with:
@@ -8,7 +33,7 @@ python -m unittest discover -s tests
 
 This includes 23 S3T tests and the 13 existing split/deletion tests. Compilation
 and `git diff --check` also passed. The test log is saved at
-`runs/s3t-validation/unit-tests.log`.
+`studies/2026-10-26_0948_s3t_validation/runs/validation_20261026/unit-tests.log`.
 
 Tested environment: PyTorch 2.7.1+cu118, torchvision 0.22.1+cu118,
 Transformers 5.8.0, and NVIDIA RTX 4090 GPUs. No other repository's implementation
@@ -39,8 +64,8 @@ checked 400 prefix states against the original source IDs and passed.
 
 Artifacts:
 
-- `runs/s3t-validation/vit-cifar10-full-pool/results.csv`
-- `runs/s3t-validation/roberta-sst2-full-pool/results.csv`
+- `studies/2026-10-26_0948_s3t_validation/runs/validation_20261026/vit-cifar10-full-pool/results.csv`
+- `studies/2026-10-26_0948_s3t_validation/runs/validation_20261026/roberta-sst2-full-pool/results.csv`
 - Each directory's `deletion_audit.json`, `deletion_trace.json`, `config.json`,
   `metadata.json`, source snapshot, backbone, and sequence checkpoints.
 
@@ -48,12 +73,12 @@ The commands used for training were equivalent to:
 
 ```bash
 python -m s3t train --config configs/s3t/vit-cifar10.json \
-  --output runs/s3t-c10-verification --device cuda:1 \
+  --output studies/2026-10-26_0948_s3t_validation/runs/manual-c10-verification --device cuda:1 \
   --set shards=2 --set slices=2 --set budget=2 \
   --set layers_per_slice=6 --set epochs_per_slice=1
 
 python -m s3t train --config configs/s3t/roberta-sst2.json \
-  --output runs/s3t-sst2-verification --device cuda:0 \
+  --output studies/2026-10-26_0948_s3t_validation/runs/manual-sst2-verification --device cuda:0 \
   --set shards=2 --set slices=2 --set budget=2 \
   --set layers_per_slice=6 --set epochs_per_slice=1
 ```
@@ -71,11 +96,11 @@ protocol. New experiments should use new output directories.
 - Across those four runs and the two full-pool runs, all **36 trained prefixes**
   were reloaded from final checkpoints. Their reconstructed validation
   accuracies exactly matched the accuracies recorded before later-stage training.
-  The detailed results are in `runs/s3t-validation/verification.json`.
+  The detailed results are in `studies/2026-10-26_0948_s3t_validation/runs/validation_20261026/verification.json`.
 - A pretrained ViT run with real CIFAR augmentation, two DataLoader workers,
   and CUDA was interrupted after the first epoch of stage two and resumed.
   All **52 adapter/head tensors** matched uninterrupted training bit for bit.
-  See `runs/s3t-validation/cuda-resume-verification.json`.
+  See `studies/2026-10-26_0948_s3t_validation/runs/validation_20261026/cuda-resume-verification.json`.
 - The unit tests additionally compare earlier-prefix **logits** bit for bit
   after later training/deactivation, verify frozen weights under AdamW, exercise
   all epoch-boundary recovery positions, and check member scheduling order.

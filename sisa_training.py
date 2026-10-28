@@ -25,6 +25,8 @@ def _link(path, target):
 
 def train_shard(args, model, optimizer, loss_fn, device):
     directory = record_directory(args.container)
+    from studies.artifacts import verify_run_source
+    verify_run_source(directory)
     cache, times = directory / "cache", directory / "times"
     model_link = cache / f"shard-{args.shard}:{args.label}.pt"
     binding = {key: getattr(args, key) for key in

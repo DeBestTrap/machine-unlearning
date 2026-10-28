@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+from pathlib import Path
 
 import pandas as pd
 
@@ -28,8 +29,8 @@ def main():
     )
     parser.add_argument(
         "--csv",
-        default="report-purchase.csv",
-        help="Path to the input report CSV (default: report-purchase.csv).",
+        default=str(Path(__file__).resolve().parent / "reports/historical/report-purchase.csv"),
+        help="Path to a report CSV (default: this study's historical Purchase report).",
     )
     args = parser.parse_args()
 

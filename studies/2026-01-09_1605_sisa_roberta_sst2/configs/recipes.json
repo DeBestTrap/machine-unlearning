@@ -1,0 +1,34 @@
+{
+  "description": "SISA RoBERTa/SST-2 sharding and learning-rate recipes.",
+  "model": "roberta",
+  "dataset": "datasets/sst2/datasetfile",
+  "defaults": {
+    "batch_size": 32,
+    "slices": 4,
+    "epochs": 2,
+    "learning_rate": 1e-05,
+    "optimizer": "adamw",
+    "chkpt_interval": 1,
+    "predict_batch_size": 32,
+    "dropout_rate": 0.1
+  },
+  "modes": {
+    "single": {},
+    "shards": {
+      "shard_grid": [
+        64,
+        128,
+        256
+      ]
+    },
+    "lrs": {
+      "slices": 1,
+      "epochs": 15,
+      "learning_rate_grid": [
+        0.001,
+        0.0001,
+        1e-05
+      ]
+    }
+  }
+}

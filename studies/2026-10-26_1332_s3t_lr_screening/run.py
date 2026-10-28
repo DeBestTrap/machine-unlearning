@@ -14,9 +14,14 @@ import subprocess
 import sys
 from time import perf_counter, time
 
-from .artifacts import _atomic, atomic_json, lock, read_json
-from .config import Config, ROOT
-from .partition import Partition, digest
+ROOT = Path(__file__).resolve().parents[2]
+STUDY = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+
+from studies.artifacts import capture_run, publish_reports, study_directory
+from s3t.artifacts import _atomic, atomic_json, lock, read_json
+from s3t.config import Config
+from s3t.partition import Partition, digest
 
 
 GRIDS = {"cifar10": ("vit-cifar10.json", [0.0002, 0.001, 0.002]),
@@ -40,7 +45,7 @@ def make_plan(datasets, device):
 
 
 def run_trial(config_path, directory, device):
-    from .engine import Run
+    from s3t.engine import Run
     started = perf_counter()
     config = Config.load(config_path)
     run = Run.create(directory, config)
@@ -77,7 +82,7 @@ def _reference_unit_seconds(dataset):
             "sst2": "roberta-sst2-full-pool"}.get(dataset)
     if name is None:
         return None
-    root = ROOT / "runs/s3t-validation" / name
+    root = study_directory("s3t_validation") / "runs/validation_20261026" / name
     if not (root / "config.json").exists():
         return None
     config = read_json(root / "config.json")
@@ -172,6 +177,7 @@ def summarize(directory, plan, state):
     lines.extend(["", status["timing_note"], "", "Completed trials contain `pilot_result.json`; "
                   "`logs/TRIAL_NAME.log` records per-epoch timing and progress.", ""])
     _atomic(directory / "report.md", lambda stream: stream.write("\n".join(lines).encode()))
+    publish_reports(STUDY, directory)
     return status
 
 
@@ -179,6 +185,7 @@ def run_search(directory, plan):
     import os
     directory = Path(directory).expanduser().resolve()
     with lock(directory / ".sweep.lock"):
+        capture_run(directory, STUDY, plan, ROOT)
         plan_path = directory / "plan.json"
         if plan_path.exists() and read_json(plan_path) != plan:
             raise ValueError("Existing search has a different plan")
@@ -198,7 +205,7 @@ def run_search(directory, plan):
             state["trials"][name] = trial_state
             atomic_json(state_path, state)
             summarize(directory, plan, state)
-            command = [sys.executable, "-u", "-m", "s3t.lr_search", "worker", "--config", str(config_path),
+            command = [sys.executable, "-u", "-m", "studies.s3t_lr_screening.run", "worker", "--config", str(config_path),
                        "--output", str(output), "--device", plan["device"]]
             print(f"Starting {name}: first_slice, BMS, device={plan['device']}", flush=True)
             log_path = directory / "logs" / f"{name}.log"
@@ -234,7 +241,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run")
-    run.add_argument("--output", required=True)
+    run.add_argument("--output", default=str(STUDY / "runs" / datetime.now(timezone.utc).strftime("screen_%Y%m%dT%H%M%S%fZ")))
     run.add_argument("--device", default="cuda:0")
     run.add_argument("--datasets", nargs="+", choices=tuple(GRIDS), default=["cifar10", "sst2"])
     worker = sub.add_parser("worker")

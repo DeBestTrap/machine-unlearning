@@ -5,7 +5,7 @@ Sliced Training for CIFAR-10/CIFAR-100 with ViT and SST-2 with RoBERTa. The meth
 is described in [Chowdhury et al., ICLR 2025](https://arxiv.org/abs/2406.16257v3).
 Read [implementation decisions](docs/s3t-decisions.md) before interpreting results
 as a reproduction of the paper's reported numbers.
-The [validation report](docs/s3t-validation.md) records the tests and real-data
+The [validation report](studies/2026-10-26_0948_s3t_validation/README.md) records the tests and real-data
 runs completed in this checkout.
 
 ## Install and check
@@ -15,8 +15,8 @@ Use a compatible PyTorch/torchvision installation for your CUDA version, then:
 ```bash
 pip install -r requirements-s3t.txt
 python -m unittest discover -s tests -p 'test_s3t_*.py'
-python -m s3t smoke --output runs/s3t-smoke --device cpu
-python -m s3t smoke --output runs/s3t-smoke-roberta --model tiny_roberta --device cpu
+python -m s3t smoke --output studies/2026-10-26_0948_s3t_validation/runs/s3t-smoke --device cpu
+python -m s3t smoke --output studies/2026-10-26_0948_s3t_validation/runs/s3t-smoke-roberta --model tiny_roberta --device cpu
 ```
 
 Smoke runs train real small transformers on generated data without downloading
@@ -37,10 +37,10 @@ may download weights. Subsequent loading of its frozen backbone is offline.
 
 ```bash
 python -m s3t train --config configs/s3t/vit-cifar10.json \
-  --output runs/s3t-c10 --device cuda:0
+  --output studies/2026-10-26_0948_s3t_validation/runs/s3t-c10 --device cuda:0
 
-python -m s3t train --run runs/s3t-c10 --device cuda:0
-python -m s3t status --run runs/s3t-c10
+python -m s3t train --run studies/2026-10-26_0948_s3t_validation/runs/s3t-c10 --device cuda:0
+python -m s3t status --run studies/2026-10-26_0948_s3t_validation/runs/s3t-c10
 ```
 
 Training resumes from the last completed epoch and skips completed members.
@@ -64,7 +64,7 @@ Override a config before creating a run using `--set key=value`, for example:
 
 ```bash
 python -m s3t train --config configs/s3t/vit-cifar10.json \
-  --output runs/s3t-c10-small-budget --device cuda:0 \
+  --output studies/2026-10-26_0948_s3t_validation/runs/s3t-c10-small-budget --device cuda:0 \
   --set shards=2 --set slices=2 --set layers_per_slice=6 \
   --set budget=2 --set epochs_per_slice=1
 ```
@@ -78,10 +78,10 @@ To run independent members on multiple GPUs, initialize once, then give each
 process disjoint `--shard` and optionally `--sequence` indices (zero based):
 
 ```bash
-python -m s3t init --config configs/s3t/vit-cifar10.json --output runs/s3t-c10
+python -m s3t init --config configs/s3t/vit-cifar10.json --output studies/2026-10-26_0948_s3t_validation/runs/s3t-c10
 # In separate terminals/jobs:
-python -m s3t train --run runs/s3t-c10 --shard 0 --device cuda:0
-python -m s3t train --run runs/s3t-c10 --shard 1 --device cuda:1
+python -m s3t train --run studies/2026-10-26_0948_s3t_validation/runs/s3t-c10 --shard 0 --device cuda:0
+python -m s3t train --run studies/2026-10-26_0948_s3t_validation/runs/s3t-c10 --shard 1 --device cuda:1
 ```
 
 Process locks reject duplicate writers. All configured members must finish
@@ -91,10 +91,10 @@ schedule the remaining configured shards as well.
 ## Evaluate and delete
 
 ```bash
-python -m s3t evaluate --run runs/s3t-c10 --split val --device cuda:0
-python -m s3t evaluate --run runs/s3t-c10 --split test --device cuda:0
+python -m s3t evaluate --run studies/2026-10-26_0948_s3t_validation/runs/s3t-c10 --split val --device cuda:0
+python -m s3t evaluate --run studies/2026-10-26_0948_s3t_validation/runs/s3t-c10 --split test --device cuda:0
 
-python -m s3t replay --run runs/s3t-c10 \
+python -m s3t replay --run studies/2026-10-26_0948_s3t_validation/runs/s3t-c10 \
   --requests deletions/cifar10-seed123-100x1.json --device cuda:0
 ```
 
@@ -109,15 +109,15 @@ model is silently substituted. Choose an explicit alternative when needed:
 
 ```bash
 # Continue recording the workload after exhaustion, with empty accuracies.
-python -m s3t replay --run runs/s3t-c10 \
+python -m s3t replay --run studies/2026-10-26_0948_s3t_validation/runs/s3t-c10 \
   --requests deletions/cifar10-seed123-100x1.json --on-exhaustion continue
 
 # Rebuild on retained examples whenever the ensemble is exhausted.
-python -m s3t replay --run runs/s3t-c10 \
+python -m s3t replay --run studies/2026-10-26_0948_s3t_validation/runs/s3t-c10 \
   --requests deletions/cifar10-seed123-100x1.json --on-exhaustion retrain --device cuda:0
 
 # Or explicitly rebuild the current ensemble after any deletions.
-python -m s3t retrain --run runs/s3t-c10 --device cuda:0
+python -m s3t retrain --run studies/2026-10-26_0948_s3t_validation/runs/s3t-c10 --device cuda:0
 ```
 
 Retraining creates a new generation using the same frozen backbone and all
@@ -130,7 +130,7 @@ a generation is pending, so its training membership cannot change mid-run.
 For a separate manual-deletion experiment:
 
 ```bash
-python -m s3t delete --run runs/manual-example --source-ids 123 456
+python -m s3t delete --run studies/2026-10-26_0948_s3t_validation/runs/manual-example --source-ids 123 456
 ```
 
 The IDs must belong to that run's original training pool. Deletion is cumulative;
@@ -181,8 +181,8 @@ have separate roles and are all recorded.
 To regenerate the aggregate CSV after evaluating more points:
 
 ```bash
-python -m s3t export --run runs/s3t-c10
-python -m s3t audit --run runs/s3t-c10
+python -m s3t export --run studies/2026-10-26_0948_s3t_validation/runs/s3t-c10
+python -m s3t audit --run studies/2026-10-26_0948_s3t_validation/runs/s3t-c10
 ```
 
 The audit checks saved source identities, every surviving prefix's dependencies,
@@ -201,9 +201,9 @@ only the CIFAR-100 search, or name all three datasets explicitly.
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
-  python -u -m s3t.lr_search run --output runs/s3t-lr-screen --device cuda:0
+  python -u -m studies.s3t_lr_screening.run run --device cuda:0
 
-python -m s3t.lr_search status --output runs/s3t-lr-screen
+python -m studies.s3t_lr_screening.run status --output studies/2026-10-26_1332_s3t_lr_screening/runs/YOUR_SCREEN
 ```
 
 Rerunning `run` resumes incomplete training and skips completed trials. A lock
@@ -222,3 +222,7 @@ These are single-member screening scores. Confirm promising learning rates with
 the intended full ensemble and additional seeds before reporting final results.
 BMS runs its matching procedure here; uniform priors do not test its advantage
 from knowing nonuniform deletion probabilities.
+
+Experiment-specific LR screening now lives in [studies/2026-10-26_1332_s3t_lr_screening/README.md](studies/2026-10-26_1332_s3t_lr_screening/README.md).
+Study runs record source provenance and require matching code before native
+training, retraining, or deletion replay; use fresh runs for updated implementations.

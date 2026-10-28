@@ -1,8 +1,8 @@
 from split_support import validate_container_split
 import numpy as np
 import json
-import os
-import importlib
+from dataset_loading import load_dataset_module
+from container_storage import record_directory
 
 import argparse
 
@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--strategy", default="uniform", help="Voting strategy, default uniform"
 )
-parser.add_argument("--container", help="Name of the container")
+parser.add_argument("--container", help="Study record directory or standalone container name")
 parser.add_argument("--shards", type=int, default=1, help="Number of shards, default 1")
 parser.add_argument(
     "--dataset",
@@ -24,13 +24,12 @@ parser.add_argument("--label", default="latest", help="Label, default latest")
 parser.add_argument("--eval_split", choices=("test", "val"), default="test")
 args = parser.parse_args()
 validate_container_split(args.container, args.dataset)
+directory = record_directory(args.container)
 
 # Load dataset metadata.
 with open(args.dataset) as f:
     datasetfile = json.loads(f.read())
-dataloader = importlib.import_module(
-    ".".join(args.dataset.split("/")[:-1] + [datasetfile["dataloader"]])
-)
+dataloader = load_dataset_module(args.dataset, datasetfile)
 
 # Output files used for the vote.
 if args.baseline != None:
@@ -43,7 +42,7 @@ outputs = []
 for filename in filenames:
     outputs.append(
         np.load(
-            os.path.join(os.path.join("containers", args.container, "outputs", "val" if args.eval_split == "val" else ""), filename),
+            directory / "outputs" / ("val" if args.eval_split == "val" else "") / filename,
             allow_pickle=True,
         )
     )
@@ -60,7 +59,7 @@ elif args.strategy.startswith("models:"):
     weights[models] = 1 / models.shape[0]  # pylint: disable=unsubscriptable-object
 elif args.strategy == "proportional":
     split = np.load(
-        "containers/{}/splitfile.npy".format(args.container), allow_pickle=True
+        directory / "splitfile.npy", allow_pickle=True
     )
     weights = np.array([shard.shape[0] for shard in split])
 

@@ -6,55 +6,35 @@ An independent S3T implementation is also available. See [S3T commands and exper
 and [implementation decisions](docs/s3t-decisions.md). It supports ViT on CIFAR-10/CIFAR-100,
 RoBERTa on SST-2, and the shared [data splits](SPLITS.md) and [deletion workloads](DELETIONS.md).
 
-You can start runing experiments by having a look at the readme in the purchase example folder at ``example-scripts/purchase-sharding``.
+Start with the [SISA Purchase study](studies/2026-01-09_1800_sisa_purchase/README.md) or the [study index](studies/README.md). Each study keeps its reports beside the associated launch scripts.
 
 ``sisa.py`` is the script that trains a given shard. It should be run as many times as the number of shards.
 
 ## SISA checkpoints and retained run data
 
-SISA keeps run records in the local `containers/<name>/` directory. Only its
-`cache/` directory points into `saved_models/<name>/cache/`, which can live on
-another drive. On this machine, `saved_models/` points to
-`/mnt/csdrive/containers/`. New checkouts use a local `saved_models/` directory
-unless you create a symlink to your preferred model drive before initialization.
+SISA study launchers pass their canonical run record directory directly, such as
+`studies/2026-10-26_2348_shared_comparison/runs/<tag>/sisa-cifar10/`. Native
+commands accept that directory through `--container`; no root container links
+are created.
 
-If `containers/` is still a legacy symlink to an external drive, separate it once:
+Each SISA record directory contains `config.json`, `report.csv`, timings,
+predictions, split/deletion records, and `checkpoint_storage.json`. Its `cache/`
+link points to the separate `saved_models/` store. On this machine,
+`saved_models/` points to `/mnt/csdrive/containers/`. Existing caches retain their
+external targets; new study caches use matching study/run subdirectories there.
+Reports are collected by each study's `reports/README.md` index.
 
-```bash
-python container_storage.py separate
-```
-
-This copies existing non-cache data locally, dereferences timing/prediction
-links, and leaves the original external files untouched. `saved_models/` takes
-over the external link. Keep the drive mounted while initializing or training.
-
-The common experiment scripts retain:
-
-- `containers/<name>/config.json`: the experiment settings and dataset metadata.
-- `containers/<name>/report.csv`: this run's report, using the existing CSV schema.
-- `containers/<name>/checkpoint_storage.json`: the last recorded checkpoint size,
-  counting each checkpoint file once, excluding shard symlink aliases.
-- `containers/<name>/times/`, `outputs/`, split files, and deletion workloads:
-  the data needed to inspect the run or regenerate reports without model files.
-
-Use a new container name for each experiment you want to retain separately.
-The usual combined `report-*.csv` files are still written as before.
-New reports include complete update timings compatible with BlockUnlearn's
-`update_v1` measurements. See [timing boundaries and historical results](TIMING.md).
-
-To delete saved models while keeping run data:
+To delete checkpoints while keeping run records:
 
 ```bash
-bash clear_containers.sh my-run  # one container
-bash clear_containers.sh         # all local containers
+bash clear_containers.sh studies/2026-10-26_2348_shared_comparison/runs/comparison_v1/sisa-cifar10
+bash clear_containers.sh  # all SISA run checkpoints
 ```
 
-Cleanup records checkpoint sizes before deleting `.pt` files and their aliases;
-it preserves local records and predictions. You can also delete a run's external
-`saved_models/<name>/` directory after the size snapshot has been saved. Existing
-predictions remain usable for aggregation, but generating new predictions or
-resuming training requires the checkpoints. S3T uses its own `runs/` layout and
-is unaffected by this SISA storage change.
+Cleanup saves the checkpoint-size measurement before removing model files.
+Predictions and reports remain available; generating new predictions or resuming
+training requires checkpoints. See [timing boundaries](TIMING.md) and the
+[study index](studies/README.md).
 
 ## Citing this work
 
@@ -69,3 +49,25 @@ If you use this repository for academic research, you are highly encouraged
   year={2021}
 }
 ```
+
+## Shared comparison preset
+
+For one SISA/S3T configuration per CIFAR-10, CIFAR-100, and SST-2 dataset with
+the same training pools and 25 saved deletions as BlockUnlearn, see
+[the shared comparison study](studies/2026-10-26_2348_shared_comparison/README.md). Preview without training:
+
+```bash
+bash studies/2026-10-26_2348_shared_comparison/run.sh --device 0 --tag comparison_v2 --dry-run
+```
+
+## Research studies
+
+Specific comparisons, LR searches, and validation experiments live in
+[studies/](studies/README.md), each with its own driver, settings, documentation,
+and local `runs/` outputs. Shared training implementations and dataset manifests
+remain reusable. New study runs capture their launch source and environment;
+resuming training/replay requires matching source. Historical results retain
+original provenance and are marked separately from current-code runs.
+
+See [the migration map](studies/MIGRATION.md) for canonical locations. Old entry
+points and directory aliases have been removed. Checkpoint cleanup remains separate from run-record cleanup.

@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 from container_storage import (checkpoint_summary, clear_models, initialize_container,
-                               record_directory, separate_storage)
+                               record_directory, saved_record_directories, separate_storage)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -92,6 +92,20 @@ class ContainerStorageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "records must be local"):
             clear_models(["fixture"])
 
+    def test_default_cleanup_discovers_canonical_study_records(self):
+        Path("saved_models").symlink_to(self.external, target_is_directory=True)
+        directory = initialize_container(self.root / "studies/2026-10-28_1200_fixture/runs/first/sisa-fixture")
+        (directory / "splitfile.npy").write_bytes(b"split metadata")
+        (directory / "cache/model.pt").write_bytes(b"weights")
+        (directory / "report.csv").write_text("accuracy\n0.9\n")
+        self.assertIn(directory, saved_record_directories())
+        result = subprocess.run([sys.executable, str(ROOT / "container_storage.py"), "clear-models"],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((directory / "cache/model.pt").exists())
+        self.assertEqual((directory / "report.csv").read_text(), "accuracy\n0.9\n")
+        self.assertFalse(Path("containers").exists())
+
     def test_real_training_reporting_and_reporting_again_after_cleanup(self):
         Path("saved_models").symlink_to(self.external, target_is_directory=True)
         for name in ("sisa.py", "distribution.py", "aggregation.py", "time.py", "container_storage.py", "sisa_timing.py"):
@@ -112,25 +126,26 @@ class ContainerStorageTests(unittest.TestCase):
         environment = {**os.environ, "CUDA_VISIBLE_DEVICES": "", "OMP_NUM_THREADS": "1",
                        "MKL_NUM_THREADS": "1", "PYTHONPATH": os.pathsep.join((str(self.root), str(ROOT)))}
         environment.pop("DELETION_REQUEST_MANIFEST", None)
+        directory = self.root / "studies/2026-10-28_1200_fixture/runs/first/sisa-fixture"
         command = ["bash", str(ROOT / "example-scripts/common/run_all.sh"), "purchase",
-                   "fixture_data/datasetfile", "2", "1", "fixture", "2", "2", "2",
+                   "fixture_data/datasetfile", "2", "1", str(directory), "2", "2", "2",
                    "0.01", "sgd", "1", "2", "combined-report"]
         completed = subprocess.run(command, env=environment, capture_output=True, text=True, timeout=90)
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
-        directory = Path("containers/fixture")
         config = json.loads((directory / "config.json").read_text())
         self.assertEqual(config["hyperparams"]["slices"], 2)
-        self.assertGreater(checkpoint_summary("fixture")["checkpoint_bytes"], 0)
+        self.assertGreater(checkpoint_summary(directory)["checkpoint_bytes"], 0)
+        self.assertFalse(Path("containers").exists())
         report = (directory / "report.csv").read_bytes()
         with (directory / "report.csv").open() as handle:
             rows = list(csv.DictReader(handle))
         self.assertEqual([row["nb_requests"] for row in rows], ["0", "1"])
-        cleanup = subprocess.run(["bash", str(ROOT / "clear_containers.sh"), "fixture"],
+        cleanup = subprocess.run(["bash", str(ROOT / "clear_containers.sh"), str(directory)],
                                  env=environment, capture_output=True, text=True, timeout=10)
         self.assertEqual(cleanup.returncode, 0, cleanup.stderr)
         self.assertEqual(list((directory / "cache").glob("*.pt")), [])
         regenerated = subprocess.run(["bash", str(ROOT / "example-scripts/common/data.sh"),
-                                     "fixture_data/datasetfile", "2", "1", "fixture", "regenerated-report",
+                                     "fixture_data/datasetfile", "2", "1", str(directory), "regenerated-report",
                                      json.dumps(config["hyperparams"], separators=(",", ":"))],
                                     env=environment, capture_output=True, text=True, timeout=30)
         self.assertEqual(regenerated.returncode, 0, regenerated.stderr)

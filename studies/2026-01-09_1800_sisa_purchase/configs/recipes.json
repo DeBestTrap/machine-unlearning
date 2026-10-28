@@ -1,0 +1,27 @@
+{
+  "description": "SISA Purchase sharding and learning-rate recipes.",
+  "model": "purchase",
+  "dataset": "datasets/purchase/datasetfile",
+  "defaults": {
+    "batch_size": 32,
+    "slices": 4,
+    "epochs": 2,
+    "learning_rate": 0.001,
+    "optimizer": "sgd",
+    "chkpt_interval": 1,
+    "predict_batch_size": 32
+  },
+  "modes": {
+    "single": {},
+    "lrs": {
+      "slices": 1,
+      "epochs": 1,
+      "learning_rate_grid": [
+        1e-06,
+        3e-06,
+        1e-05
+      ],
+      "predict_batch_size": 64
+    }
+  }
+}
