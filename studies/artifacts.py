@@ -45,7 +45,7 @@ def digest(value):
 def source_inventory(root, study):
     root, study = Path(root), Path(study)
     files = set(root.glob("*.py"))
-    for name in ("s3t", "architectures", "datasets", "example-scripts", "configs"):
+    for name in ("s3t", "reporting", "architectures", "datasets", "example-scripts", "configs"):
         directory = root / name
         if directory.exists():
             files.update(path for path in directory.rglob("*")
@@ -158,6 +158,11 @@ def execute_plan(directory, study, commands, settings, root=ROOT, prepare=None):
         publish_reports(study, directory)
         if result.returncode:
             return result.returncode
+    if any(path.is_file() for path in directory.glob("*/run.json")):
+        from reporting.reports import refresh
+        from reporting.study import report_settings
+        refresh([directory], directory / "reports/comparison", **report_settings(study))
+        publish_reports(study, directory)
     return 0
 
 
@@ -175,6 +180,11 @@ def publish_reports(study, directory):
         sources[path.name] = path
     for path in sorted(directory.glob("*/results.csv")):
         sources[f"{path.parent.name}.csv"] = path
+    for path in sorted((directory / "reports").glob("*comparison")):
+        if path.is_dir():
+            sources[path.name] = path
+    for path in sorted(directory.glob("*/reports/comparison")):
+        sources[f"{path.parent.parent.name}-comparison"] = path
     for name, source in sources.items():
         target = study / "reports" / directory.name / name
         target.parent.mkdir(parents=True, exist_ok=True)

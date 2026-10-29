@@ -107,7 +107,8 @@ def provenance():
         status = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()
     except (OSError, subprocess.CalledProcessError):
         commit, status = None, None
-    files = list((ROOT / "s3t").glob("*.py")) + [ROOT / "dataset_splits.py", ROOT / "deletion_requests.py"]
+    files = list((ROOT / "s3t").glob("*.py")) + list((ROOT / "reporting").glob("*.py")) + [
+        ROOT / "dataset_splits.py", ROOT / "deletion_requests.py", ROOT / "comparison_export.py"]
     return {"git_commit": commit, "git_status": status, "versions": versions,
             "source_files": {str(path.relative_to(ROOT)): file_hash(path) for path in sorted(files)}}
 

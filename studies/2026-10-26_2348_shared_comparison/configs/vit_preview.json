@@ -1,0 +1,10 @@
+{
+  "description": "Six-run reporting preview; one epoch and three shared deletions on full CIFAR pools",
+  "datasets": ["cifar10", "cifar100"],
+  "methods": ["sisa", "su", "bm"],
+  "epochs": 1,
+  "requests": 3,
+  "training_seed": 1,
+  "sisa": {"shards": 5, "slices": 2},
+  "report_metrics": ["accuracy", "macro_f1"]
+}

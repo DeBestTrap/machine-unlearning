@@ -1,0 +1,8 @@
+{
+  "split": "test",
+  "metric": "accuracy",
+  "x": "mean_update_time_sec",
+  "y": "final_metric",
+  "plots": true,
+  "strict": false
+}

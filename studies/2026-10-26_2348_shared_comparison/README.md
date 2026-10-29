@@ -1,5 +1,63 @@
 # Shared 25-deletion comparison
 
+## Six-run ViT reporting preview
+
+`run_preview.sh` launches SISA, SU and BM on CIFAR-10 and CIFAR-100 with one
+epoch, one training seed, the full 47,500-example training pools, and the first
+three single-example deletions of the verified workload. SISA uses five shards
+and two slices; SU/BM retain their selected allocations. CIFAR-10 and CIFAR-100
+run on separate GPUs, with methods processed serially within each dataset.
+Settings are in [configs/vit_preview.json](configs/vit_preview.json).
+
+```bash
+bash studies/2026-10-26_2348_shared_comparison/run_preview.sh \
+  --devices 0 1 --tag vit_preview_20261029 --dry-run
+bash studies/2026-10-26_2348_shared_comparison/run_preview.sh \
+  --devices 0 1 --tag vit_preview_20261029
+```
+
+The launcher requires CUDA and writes native SU/BM experiments in the sibling
+BlockUnlearn checkout, retaining its configured checkpoint store. SISA records,
+per-method logs, source snapshots, launch plans and combined reports live in this
+study's `runs/<tag>/`. BlockUnlearn's corresponding study references the same
+native records. Every successful method refreshes both accuracy and macro-F1
+tables/figures. Start with `runs/<tag>/report.md` or
+`reports/<tag>/comparison/summary.csv`. This is a functional preview with a small
+deletion workload, not a convergence benchmark. Use a fresh tag for another run.
+
+## Shared reports and plots
+
+New runs automatically export the [shared comparison records](../../reporting/README.md)
+and rebuild `runs/<tag>/reports/comparison/`, linked from `reports/<tag>/comparison/`.
+The three saved files are `run.json`, `steps.jsonl`, and `evaluations.jsonl` per
+method run. Generated `steps.csv` joins costs with final-state scores;
+`summary.csv` summarizes each run and excludes initial training from deletion
+statistics. Compressed classification predictions/labels and confusion matrices
+stay with the records when checkpoints are removed.
+
+Defaults live in [configs/report.json](configs/report.json). To regenerate reports
+and figures with another metric/axis, without loading models or datasets:
+
+```bash
+python -m studies.shared_comparison.report --tag comparison_v2
+python -m studies.shared_comparison.report --tag comparison_v2 \
+  --metric macro_f1 --x p95_update_time_sec --y final_metric
+```
+
+Add BlockUnlearn runs exported with the same schema:
+
+```bash
+python -m studies.shared_comparison.report --tag comparison_v2 \
+  --include ../BlockUnlearn/unlearning/experiments/MODEL/EXPERIMENT/RUN
+```
+
+Additional input paths are saved for subsequent refreshes. Use `--split val`,
+`--no-plots` or `--strict` as needed. The report manifest and README identify
+different evaluation pools, hardware, models and timing scopes. Existing
+`comparison_v1` results retain their historical evidence; no new timer or F1 is
+invented from an old accuracy scalar. Explicit legacy export commands are in the
+shared reporting documentation.
+
 Saved results are collected in the [report index](reports/README.md), alongside
 the study’s `run.sh` / `run.py` entry points.
 

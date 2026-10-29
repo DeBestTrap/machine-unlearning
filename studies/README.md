@@ -64,3 +64,9 @@ Current launchers create fresh `runs/<tag>/` records and publish links to their
 CSVs/reports under `reports/<tag>/`, leaving the original generated files in place.
 Report indexes and source are versioned; generated outputs and historical CSV
 archives remain local artifacts.
+
+New SISA/S3T executions export the [shared comparison contract](../reporting/README.md).
+On successful completion the study also builds `runs/<tag>/reports/comparison/`:
+per-step and per-run CSVs, plots, settings and source checksums. These reports
+are published through `reports/<tag>/comparison/`. Change reporting settings and
+refresh without training; source capture guards apply to training, not analysis.

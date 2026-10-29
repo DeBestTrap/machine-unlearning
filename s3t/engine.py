@@ -5,6 +5,7 @@ import io
 import math
 from pathlib import Path
 import shutil
+import uuid
 from time import perf_counter
 
 import torch
@@ -21,6 +22,9 @@ from .data import load_data
 from .models import build_backbone
 from .partition import Partition, digest
 from .sequences import select_sequences
+from reporting import classification_evaluation, record_evaluation
+from reporting.core import hardware
+from reporting.timing import OperationTimer
 
 
 def _loader(dataset, config, device, *, train=False, seed=0):
@@ -125,6 +129,8 @@ class Run:
                      "history": [], "workload_sha256": None}
             atomic_json(directory / "state.json", state)
             metadata = {"schema_version": 1, "config_sha256": digest(config.to_dict()),
+                        "comparison_run_id": "s3t-" + uuid.uuid4().hex,
+                        "comparison_schema_version": 1, "hardware": hardware(),
                         "split_sha256": data.split["manifest_sha256"], "preprocessing": data.preprocessing,
                         "source_ids": data.source_ids, "backbone_sha256": file_hash(directory / "backbone.pt"),
                         "backbone_spec_sha256": digest(spec),
@@ -160,6 +166,14 @@ class Run:
         if not set(batches).issubset(self.metadata["source_ids"]):
             raise ValueError("Deletion history contains IDs outside training")
         return state
+
+    def _record_execution_device(self, device):
+        path = self.directory / "comparison_runtime.json"
+        runtime = read_json(path) if path.exists() else {"hardware": hardware(device)}
+        devices = set(runtime.get("execution_devices", []))
+        devices.add(str(device))
+        runtime["execution_devices"] = sorted(devices)
+        atomic_json(path, runtime)
 
     def generation_dir(self, generation):
         return self.directory / "generations" / f"{generation:04d}"
@@ -200,7 +214,12 @@ class Run:
         verify_run_source(self.directory)
         if max_epochs is not None and (type(max_epochs) is not int or max_epochs < 1):
             raise ValueError("max_epochs must be a positive integer or None")
+        if shard is not None and not 0 <= shard < self.config.shards:
+            raise ValueError("Shard index out of range")
+        if sequence is not None and not 0 <= sequence < self.config.budget:
+            raise ValueError("Sequence index out of range")
         device = choose_device(device)
+        self._record_execution_device(device)
         if self.config.precision == "bf16" and device.type == "cuda" and not torch.cuda.is_bf16_supported():
             raise ValueError("This GPU does not support bfloat16")
         with lock(self.directory / ".lifecycle.lock", shared=True):
@@ -209,9 +228,19 @@ class Run:
             if state["deleted_source_ids"]:
                 self.require_complete(generation)
                 raise ValueError("Deletion has started. Use retrain to build a new retained-data generation")
-            return self._train_generation(generation, device, shard, sequence, max_epochs=max_epochs)
+            selected = [(s, q) for s in (range(self.config.shards) if shard is None else [shard])
+                        for q in (range(self.config.budget) if sequence is None else [sequence])]
+            if all(self.member_path(generation, s, q).exists()
+                   and self.member_path(generation, s, q).with_suffix(".json").exists()
+                   and read_json(self.member_path(generation, s, q).with_suffix(".json"))["complete"] for s, q in selected):
+                return self._train_generation(generation, device, shard, sequence, max_epochs=max_epochs)
+            def clock():
+                synchronize(device)
+                return perf_counter()
+            with OperationTimer(self.directory / "comparison_timing" / f"initial-s{shard}-q{sequence}.json", clock) as timer:
+                return self._train_generation(generation, device, shard, sequence, max_epochs=max_epochs, parent_timer=timer)
 
-    def _train_generation(self, generation, device, shard=None, sequence=None, *, max_epochs=None):
+    def _train_generation(self, generation, device, shard=None, sequence=None, *, max_epochs=None, parent_timer=None):
         if shard is not None and not 0 <= shard < self.config.shards:
             raise ValueError("Shard index out of range")
         if sequence is not None and not 0 <= sequence < self.config.budget:
@@ -221,7 +250,14 @@ class Run:
             for sequence_id in range(self.config.budget) if sequence is None else [sequence]:
                 path = self.member_path(generation, shard_id, sequence_id)
                 with lock(path.with_suffix(".lock")):
-                    spent = self._train_member(generation, shard_id, sequence_id, device, remaining)
+                    started = perf_counter()
+                    try:
+                        spent = self._train_member(generation, shard_id, sequence_id, device, remaining)
+                    finally:
+                        if parent_timer is not None:
+                            # The member journal owns this interval; keep loop,
+                            # locking and publication overhead in the parent.
+                            parent_timer.exclude(perf_counter() - started)
                     if remaining is not None:
                         remaining -= spent
                         if remaining <= 0:
@@ -229,6 +265,19 @@ class Run:
         return self.status()
 
     def _train_member(self, generation, shard, sequence, device, max_epochs):
+        path = self.member_path(generation, shard, sequence)
+        sidecar = path.with_suffix(".json")
+        if path.exists() and sidecar.exists() and read_json(sidecar)["complete"]:
+            # Still validate the checkpoint binding when skipping completed work.
+            self.checkpoint(generation, shard, sequence)
+            return 0
+        def clock():
+            synchronize(device)
+            return perf_counter()
+        with OperationTimer(self.directory / "comparison_timing" / f"g{generation}-s{shard}-q{sequence}.json", clock) as timer:
+            return self._train_member_work(generation, shard, sequence, device, max_epochs, timer)
+
+    def _train_member_work(self, generation, shard, sequence, device, max_epochs, timer):
         config, path = self.config, self.member_path(generation, shard, sequence)
         previous = self.checkpoint(generation, shard, sequence) if path.exists() else None
         if previous and previous["complete"]:
@@ -285,6 +334,7 @@ class Run:
                 synchronize(device)
                 seconds = perf_counter() - started
                 train_seconds += seconds
+                timer.add_training(seconds)
                 record = {"stage": stage, "epoch": epoch, "examples": examples, "loss": loss_sum / examples,
                           "accuracy": correct / examples, "seconds": seconds, "lr": optimizer.param_groups[0]["lr"]}
                 history.append(record)
@@ -295,7 +345,10 @@ class Run:
                     eval_started = perf_counter()
                     val_logits, val_labels = predict(model, self.data.val, config, device)
                     synchronize(device)
-                    evaluation_seconds += perf_counter() - eval_started
+                    eval_seconds = perf_counter() - eval_started
+                    evaluation_seconds += eval_seconds
+                    if self.config.selection != "validation":
+                        timer.exclude(eval_seconds)
                     score = float((val_logits.argmax(-1) == val_labels).float().mean())
                     scores.append(score)
                     record["validation_accuracy"] = score
@@ -387,6 +440,8 @@ class Run:
     def evaluate(self, device="auto", split="test", *, step=None, cache=True):
         if split not in ("val", "test"):
             raise ValueError("Evaluation split must be val or test")
+        device = choose_device(device)
+        self._record_execution_device(device)
         with lock(self.directory / ".lifecycle.lock", shared=True):
             state = self.state()
             if step is not None and step != state["step"]:
@@ -398,7 +453,7 @@ class Run:
                     event = state["history"][step - 1]
                     state = dict(state, step=step, generation=event["generation"],
                                  deleted_source_ids=event["cumulative_source_ids"])
-            return self._evaluate_state(state, choose_device(device), split, cache)
+            return self._evaluate_state(state, device, split, cache)
 
     def _evaluate_state(self, state, device, split, cache):
         self.require_complete(state["generation"])
@@ -439,6 +494,26 @@ class Run:
                   "capped_evaluation": self.config.max_eval_examples is not None,
                   "deletion_planning_seconds": state["history"][state["step"] - 1]["planning_seconds"] if state["step"] else 0.0,
                   **self.costs(state["generation"])}
+        source_hash = None
+        pool = getattr(data, split)
+        source = getattr(pool, "source", None)
+        if source is not None and hasattr(source, "data") and hasattr(source, "targets"):
+            from dataset_splits import fingerprint_cifar
+            source_hash = fingerprint_cifar(source.data, source.targets)
+        evaluation = classification_evaluation(
+            self.directory, run_id="s3t-" + self.metadata["run_sha256"][:24],
+            state_id=f"g{state['generation']}-step-{state['step']}", step=state["step"], split=split,
+            dataset=self.split["dataset_id"], labels=reference.tolist() if reference is not None else
+            [int(pool[index][1]) for index in range(len(pool))],
+            predictions=total.argmax(-1).tolist() if total is not None else None,
+            scores=total.numpy() if total is not None else None,
+            num_classes=data.num_classes, split_sha256=self.split["manifest_sha256"], source_sha256=source_hash,
+            evaluation_time_sec=result["evaluation_seconds"], status=result["status"],
+            method_details={"generation": state["generation"], "active_shards": len(active),
+                            "prediction_cache_hits": hits, "aggregation": self.config.aggregation,
+                            "score_type": self.config.aggregation})
+        result["comparison_evaluation"] = evaluation
+        record_evaluation(self.directory, evaluation)
         path = self.directory / "evaluations" / f"g{state['generation']:04d}-step-{state['step']:06d}-{split}.json"
         atomic_json(path, result)
         return result
@@ -446,20 +521,30 @@ class Run:
     def delete(self, source_ids, *, workload_sha256=None):
         from studies.artifacts import verify_run_source
         verify_run_source(self.directory)
+        state = self.state()
+        self._validate_request(state, source_ids, workload_sha256)
+        index = state["step"] + 1
+        with OperationTimer(self.directory / "comparison_timing" / f"delete-{index}.json", perf_counter) as timer:
+            return self._delete(source_ids, workload_sha256=workload_sha256, timer=timer)
+
+    def _validate_request(self, state, source_ids, workload_sha256):
+        if (not source_ids or any(type(index) is not int for index in source_ids)
+                or len(set(source_ids)) != len(source_ids)):
+            raise ValueError("Deletion batch must contain distinct integer source IDs")
+        if not set(source_ids).issubset(self.metadata["source_ids"]):
+            raise ValueError("Deletion ID is outside this run's training pool")
+        if set(source_ids) & set(state["deleted_source_ids"]):
+            raise ValueError("Deletion ID was already deleted")
+        if state["workload_sha256"] != workload_sha256 and (state["step"] or state["workload_sha256"] is not None):
+            raise ValueError("Cannot mix different workloads or manual deletion batches in one run")
+
+    def _delete(self, source_ids, *, workload_sha256=None, timer):
         with lock(self.directory / ".lifecycle.lock"):
             state = self.state()
             self.require_complete(state["generation"])
             if (self.generation_dir(state["generation"] + 1) / "generation.json").exists():
                 raise ValueError("A retraining generation is pending; resume retrain before further deletions")
-            if (not source_ids or any(type(index) is not int for index in source_ids)
-                    or len(set(source_ids)) != len(source_ids)):
-                raise ValueError("Deletion batch must contain distinct integer source IDs")
-            if not set(source_ids).issubset(self.metadata["source_ids"]):
-                raise ValueError("Deletion ID is outside this run's training pool")
-            if set(source_ids) & set(state["deleted_source_ids"]):
-                raise ValueError("Deletion ID was already deleted")
-            if state["workload_sha256"] != workload_sha256 and (state["step"] or state["workload_sha256"] is not None):
-                raise ValueError("Cannot mix different workloads or manual deletion batches in one run")
+            self._validate_request(state, source_ids, workload_sha256)
             started = perf_counter()
             state["deleted_source_ids"] = sorted(set(state["deleted_source_ids"]) | set(source_ids))
             state["step"] += 1
@@ -474,7 +559,9 @@ class Run:
             state["history"].append(event)
             # One atomic state contains both the authoritative history and current masks.
             atomic_json(self.directory / "state.json", state)
+            trace_started = perf_counter()
             atomic_json(self.directory / "deletion_trace.json", state["history"])
+            timer.exclude(perf_counter() - trace_started)
             return event
 
     def replay(self, workload_path, device="auto", split="test", *, steps=None, cache=True,
@@ -533,6 +620,18 @@ class Run:
         """Start/resume a new generation on all retained examples, then publish it."""
         from studies.artifacts import verify_run_source
         verify_run_source(self.directory)
+        state = self.state()
+        self._record_execution_device(choose_device(device))
+        if read_json(self.generation_dir(state["generation"]) / "generation.json")["excluded_source_ids"] == state["deleted_source_ids"]:
+            if state["deleted_source_ids"]:
+                return read_json(self.generation_dir(state["generation"]) / "retraining.json")
+        def clock():
+            synchronize(choose_device(device))
+            return perf_counter()
+        with OperationTimer(self.directory / "comparison_timing" / f"publish-{state['generation'] + 1}.json", clock) as timer:
+            return self._retrain(device, max_epochs=max_epochs, timer=timer)
+
+    def _retrain(self, device="auto", *, max_epochs=None, timer):
         if max_epochs is not None and (type(max_epochs) is not int or max_epochs < 1):
             raise ValueError("max_epochs must be a positive integer or None")
         with lock(self.directory / ".lifecycle.lock"):
@@ -559,7 +658,7 @@ class Run:
                 atomic_json(directory / "partition.json", partition.to_dict())
                 atomic_json(directory / "generation.json", generation_meta)
             started = perf_counter()
-            self._train_generation(generation, choose_device(device), max_epochs=max_epochs)
+            self._train_generation(generation, choose_device(device), max_epochs=max_epochs, parent_timer=timer)
             if max_epochs is not None:
                 try:
                     self.require_complete(generation)
@@ -592,6 +691,8 @@ class Run:
         from .artifacts import _atomic
         path = self.directory / "results.csv"
         _atomic(path, lambda stream: stream.write(buffer.getvalue().encode()))
+        from comparison_export import export_s3t
+        export_s3t(self.directory)
         return str(path)
 
     def audit(self):

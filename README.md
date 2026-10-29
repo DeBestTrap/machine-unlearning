@@ -24,6 +24,11 @@ link points to the separate `saved_models/` store. On this machine,
 external targets; new study caches use matching study/run subdirectories there.
 Reports are collected by each study's `reports/README.md` index.
 
+New runs also export shared `run.json`, `steps.jsonl`, and `evaluations.jsonl`
+records, retaining classification confusion matrices, predictions and labels
+outside checkpoint storage. [Shared reporting](reporting/README.md) explains
+how to rebuild tables and plots or choose another metric without models.
+
 To delete checkpoints while keeping run records:
 
 ```bash

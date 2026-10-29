@@ -7,6 +7,7 @@ from torch.nn.functional import one_hot
 from sharded import fetchTestBatch
 from container_storage import record_directory
 import json
+import os
 
 import argparse
 
@@ -73,7 +74,14 @@ parser.add_argument(
     help="Label to be used on simlinks and outputs, default latest",
 )
 parser.add_argument("--eval_split", choices=("test", "val"), default="test")
+parser.add_argument("--seed", type=int, default=os.environ.get("SISA_SEED"), help="Base RNG seed; each shard uses seed + shard")
 args = parser.parse_args()
+if args.seed is not None:
+    if not 0 <= args.seed < 2**32:
+        parser.error("seed must be an integer in [0, 2**32)")
+    shard_seed = (args.seed + args.shard) % 2**32
+    np.random.seed(shard_seed)
+    torch.manual_seed(shard_seed)
 validate_container_split(args.container, args.dataset)
 directory = record_directory(args.container)
 if args.train:

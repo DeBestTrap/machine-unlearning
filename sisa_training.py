@@ -32,6 +32,7 @@ def train_shard(args, model, optimizer, loss_fn, device):
     binding = {key: getattr(args, key) for key in
                ("model", "dataset", "shard", "label", "slices", "epochs", "batch_size",
                 "learning_rate", "optimizer", "dropout_rate", "chkpt_interval")}
+    binding["seed"] = getattr(args, "seed", None)
     for name in ("splitfile.npy", f"requestfile:{args.label}.npy"):
         binding[name] = sha256((directory / name).read_bytes()).hexdigest()
     timer = UpdateTimer(directory, args.shard, args.label, binding, lambda: synchronized_time(device))

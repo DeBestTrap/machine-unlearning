@@ -65,3 +65,20 @@ BlockUnlearn's older replacement/retraining component totals remain legacy
 measurements. Historical traces are not automatically relabelled `update_v1`.
 Record fresh runs under the same split/workload and hardware for comparisons using
 the new definition.
+
+## S3T and shared reports
+
+New S3T runs record `comparison_timing/` journals with `update_v1` scope. Deletion
+work includes request validation, state/partition reads, selection and authoritative
+state writes. If exhaustion triggers retraining, member training and generation
+preparation/publication are charged once to that request. Validation needed for
+`selection=validation` is included; diagnostic validation for `longest_prefix` and
+reporting evaluation/trace publication are excluded. The controller journal excludes
+member intervals, which have their own journals, preventing double counting.
+Handled interruptions accumulate; hard-kill intervals make a timing unavailable.
+
+Shared records explicitly identify serial execution. SISA sums serial shard
+operations; S3T sums serial member/controller operations. These measurements are
+not parallel request latency. Generation/member costs are not repeatedly charged
+to every evaluation row. Historical S3T planning-only time stays a diagnostic,
+not a substitute for complete update time. See [the report contract](reporting/README.md).

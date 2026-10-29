@@ -85,6 +85,18 @@ def main(argv=None):
         atomic_json(requests, generate_workload(run.split, seed=123, steps=6))
         results = run.replay(requests, args.device, on_exhaustion="continue")
         _print({"status": run.status(), "final_evaluation": results[-1], "results_csv": run.export_csv()})
+    elif args.command == "export":
+        # Shared export/regeneration uses saved records even if weights were pruned.
+        from comparison_export import export_s3t
+        from reporting.core import read_jsonl
+        from reporting.reports import refresh
+        directory = export_s3t(args.run)
+        evaluations = read_jsonl(directory / "evaluations.jsonl")
+        scored = [item for item in evaluations if "accuracy" in item["metrics"]]
+        report = refresh([directory], directory / "reports/comparison",
+                         split="test" if any(item["split"] == "test" for item in scored) else "val") if scored else None
+        _print({"comparison_records": str(directory), "report": report})
+        return 0
     else:
         run = Run(args.run)
         if args.command == "evaluate":
@@ -103,3 +115,7 @@ def main(argv=None):
             _print(run.audit())
         else:
             _print({"results_csv": run.export_csv()})
+    if args.command in ("evaluate", "replay", "export", "smoke") and (run.directory / "run.json").exists():
+        from reporting.reports import refresh
+        refresh([run.directory], run.directory / "reports/comparison",
+                split=getattr(args, "split", "test"))

@@ -116,7 +116,8 @@ def write_reports(container, dataset, shards, requests, output, hyperparams):
     for label, total in enumerate(totals):
         accuracy = float(subprocess.check_output(
             [sys.executable, "aggregation.py", "--strategy", "uniform", "--container", container,
-             "--shards", str(shards), "--dataset", dataset, "--label", str(label)], text=True).strip())
+             "--shards", str(shards), "--dataset", dataset, "--label", str(label),
+             "--save-evaluation"], text=True).strip())
         rows.append({"nb_shards": shards, "nb_requests": label, "accuracy": accuracy,
                      "retraining_time": total["update_time_sec"], "hyperparams_json": hyperparams,
                      **{key: total[key] for key in ("update_time_sec", "training_time_sec", "timing_scope")}})
@@ -141,6 +142,9 @@ def write_reports(container, dataset, shards, requests, output, hyperparams):
     if output.absolute() != local_report.absolute():
         atomic_text(output, render(old_rows + rows))
     atomic_text(local_report, render(rows))
+    if (record_directory(container) / "config.json").is_file():
+        from comparison_export import export_sisa
+        export_sisa(record_directory(container))
 
 
 def main():
