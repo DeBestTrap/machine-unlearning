@@ -1,6 +1,21 @@
 # Shared 25-deletion comparison
 
-## Six-run ViT reporting preview
+## ViT reporting preview
+
+To run only CIFAR-10 across SISA, SU and BM sequentially on one GPU:
+
+```bash
+bash studies/2026-10-26_2348_shared_comparison/run_preview.sh \
+  --datasets cifar10 --devices 0 --tag vit_preview_c10_new --dry-run
+bash studies/2026-10-26_2348_shared_comparison/run_preview.sh \
+  --datasets cifar10 --devices 0 --tag vit_preview_c10_new
+```
+
+Use a fresh tag for each execution. The default still runs both datasets on
+separate GPUs. `--devices` assigns one logical GPU per selected dataset in order;
+an inherited scheduler `CUDA_VISIBLE_DEVICES` mask is preserved for child jobs.
+The BlockUnlearn study contains `run_vit_preview.sbatch` and Alpha submission
+instructions for this single-dataset run. Both repositories must be deployed.
 
 `run_preview.sh` launches SISA, SU and BM on CIFAR-10 and CIFAR-100 with one
 epoch, one training seed, the full 47,500-example training pools, and the first

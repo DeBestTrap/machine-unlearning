@@ -32,10 +32,20 @@ def block_sources(root):
     return {str(path.relative_to(root)): sha256(path.read_bytes()).hexdigest() for path in sorted(paths)}
 
 
-def prepare_plan(tag, devices, block_root, requests=None, *, resume=False):
+def prepare_plan(tag, devices, block_root, requests=None, *, resume=False, datasets=None):
     if not re.fullmatch(r"[A-Za-z0-9_-]+", tag):
         raise ValueError("Use a tag containing letters, numbers, underscores or hyphens")
     settings = json.loads((STUDY / "configs/vit_preview.json").read_text())
+    datasets = settings["datasets"] if datasets is None else list(datasets)
+    if not datasets or len(set(datasets)) != len(datasets) or set(datasets) - set(settings["datasets"]):
+        raise ValueError("Select unique preview datasets: cifar10 and/or cifar100")
+    if len(devices) != len(datasets) or any(not value.isdigit() for value in devices):
+        raise ValueError("Supply one numeric GPU index per selected dataset")
+    if len(set(devices)) != len(devices):
+        raise ValueError("Concurrent datasets require different GPU indices")
+    settings["datasets"] = datasets
+    visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+    visible_devices = visible_devices.split(",") if visible_devices is not None else None
     if resume:
         saved = json.loads((STUDY / "runs" / tag / "plan.json").read_text())
         saved_devices = [next(item["physical_device"] for item in saved["commands"] if item["dataset"] == name)
@@ -55,6 +65,10 @@ def prepare_plan(tag, devices, block_root, requests=None, *, resume=False):
     block_output = block_root / "studies" / STUDY.name / "runs" / tag
     workloads, commands = {}, []
     for name, device in zip(settings["datasets"], devices):
+        if visible_devices is not None and int(device) >= len(visible_devices):
+            raise ValueError(f"GPU index {device} is outside CUDA_VISIBLE_DEVICES")
+        # Preserve the scheduler's device mask when selecting a logical GPU.
+        child_device = visible_devices[int(device)].strip() if visible_devices is not None else device
         entry = protocol["datasets"][name]
         split = load_manifest(ROOT / "splits" / entry["split"])
         block_split = load_manifest(block_root / "splits" / entry["split"])
@@ -69,7 +83,7 @@ def prepare_plan(tag, devices, block_root, requests=None, *, resume=False):
         # Each process sees only its assigned physical GPU, addressed as cuda:0.
         sisa = build_plan(protocol, ROOT, ["sisa"], [name], tag, "0")[0]
         sisa.update(cwd=str(ROOT), experiment=None, physical_device=device)
-        sisa["env"]["CUDA_VISIBLE_DEVICES"] = device
+        sisa["env"]["CUDA_VISIBLE_DEVICES"] = child_device
         sisa["env"]["SISA_SEED"] = str(settings["training_seed"])
         commands.append(sisa)
         for item in build_plan(protocol, block_root, ["fc", "fcm"], [name], tag, "0"):
@@ -83,7 +97,7 @@ def prepare_plan(tag, devices, block_root, requests=None, *, resume=False):
             argv.extend(["--set", "train_args.future_group_merge_mode=" + json.dumps(
                 "joint_warmup" if method == "su" else "naive_weight_average")])
             item.update(method=method, cwd=str(block_root), experiment=experiment, physical_device=device)
-            item["env"]["CUDA_VISIBLE_DEVICES"] = device
+            item["env"]["CUDA_VISIBLE_DEVICES"] = child_device
             commands.append(item)
     return dict(tag=tag, preview_settings=settings, protocol=protocol, workloads=workloads,
                 commands=commands, block_root=str(block_root), block_output=str(block_output),
@@ -219,10 +233,10 @@ def run(plan, *, resume=False):
             with lock:
                 results.append(dict(method=item["method"], dataset=dataset, records=str(records)))
                 render_reports(output, results, block_output)
-            print(f"Finished {label}; combined reports refreshed ({len(results)}/6)", flush=True)
+            print(f"Finished {label}; combined reports refreshed ({len(results)}/{len(plan['commands'])})", flush=True)
 
     failures = []
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with ThreadPoolExecutor(max_workers=len(plan["protocol"]["datasets"])) as pool:
         futures = [pool.submit(dataset_worker, dataset) for dataset in plan["protocol"]["datasets"]]
         for future in as_completed(futures):
             try:
@@ -232,24 +246,27 @@ def run(plan, *, resume=False):
                 print(str(error), file=sys.stderr, flush=True)
     write_json(output / "completion.json", dict(completed_at=datetime.now(timezone.utc).isoformat(),
                                                 completed_runs=len(results), failures=failures))
-    print(f"Preview finished: {len(results)}/6 runs; report: {output / 'report.md'}", flush=True)
+    print(f"Preview finished: {len(results)}/{len(plan['commands'])} runs; report: {output / 'report.md'}", flush=True)
     return int(bool(failures))
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", default="vit_preview_" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
-    parser.add_argument("--devices", nargs=2, default=["0", "1"], metavar=("CIFAR10_GPU", "CIFAR100_GPU"))
+    parser.add_argument("--datasets", nargs="+", choices=("cifar10", "cifar100"),
+                        help="Preview datasets, in the same order as --devices")
+    parser.add_argument("--devices", nargs="+", help="One logical GPU index per selected dataset")
     parser.add_argument("--block-root", type=Path, default=ROOT.parent / "BlockUnlearn/unlearning")
     parser.add_argument("--requests", type=int, help="Override the preview's three deletion requests")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--resume", action="store_true", help="Reuse completed trials and retained SISA predictions")
     args = parser.parse_args(argv)
-    if any(not value.isdigit() for value in args.devices) or len(set(args.devices)) != 2:
-        parser.error("Assign two different numeric GPU indices")
     try:
-        plan = prepare_plan(args.tag, args.devices, args.block_root.resolve(), args.requests, resume=args.resume)
-        print(f"Tag: {args.tag}; six runs, {plan['protocol']['epochs']} epoch, {plan['protocol']['steps']} deletions/dataset", flush=True)
+        datasets = args.datasets or ["cifar10", "cifar100"]
+        devices = args.devices if args.devices is not None else [str(index) for index in range(len(datasets))]
+        plan = prepare_plan(args.tag, devices, args.block_root.resolve(), args.requests,
+                            resume=args.resume, datasets=datasets)
+        print(f"Tag: {args.tag}; {len(plan['commands'])} runs, {plan['protocol']['epochs']} epoch, {plan['protocol']['steps']} deletions/dataset", flush=True)
         for item in plan["commands"]:
             print(f"[{item['method']}/{item['dataset']}, GPU {item['physical_device']}] {shlex.join(item['argv'])}", flush=True)
         return 0 if args.dry_run else run(plan, resume=args.resume)
