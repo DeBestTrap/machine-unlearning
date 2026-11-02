@@ -45,7 +45,7 @@ def load_protocol(path, root):
 def build_plan(protocol, root, methods, datasets, tag, device, on_exhaustion="continue"):
     """Build every command before running anything; no filesystem writes."""
     block = (root / "run_sweep.py").exists()
-    allowed = {"fcm", "fc"} if block else {"sisa", "s3t"}
+    allowed = {"fcm", "fc"} if block else {"sisa", "protosisa", "s3t"}
     if set(methods) - allowed:
         raise ValueError(f"Methods for this repository: {', '.join(sorted(allowed))}")
     if not re.fullmatch(r"[A-Za-z0-9_-]+", tag):
@@ -94,8 +94,8 @@ def build_plan(protocol, root, methods, datasets, tag, device, on_exhaustion="co
                 for key, value in overrides.items():
                     argv.extend(["--set", f"{key}={json.dumps(value)}"])
                 add(method, name, argv)
-            elif method == "sisa":
-                settings = protocol["sisa"]
+            elif method in ("sisa", "protosisa"):
+                settings = protocol[method]
                 metadata = root / entry["sisa_dataset"]
                 info = json.loads(metadata.read_text())
                 actual = load_manifest(metadata.parent / info["split_manifest"])
@@ -104,9 +104,36 @@ def build_plan(protocol, root, methods, datasets, tag, device, on_exhaustion="co
                 if (info["nb_train"] != len(actual["train_indices"])
                         or info["nb_val"] != len(actual["val_indices"])):
                     raise ValueError(f"{name}: SISA datasetfile pool sizes differ")
-                records = root / STUDY_RELATIVE / "runs" / tag / f"sisa-{name}"
+                records = root / STUDY_RELATIVE / "runs" / tag / f"{method}-{name}"
                 if records.exists():
-                    raise ValueError(f"SISA records exist; choose a new tag: {records}")
+                    raise ValueError(f"{method.upper()} records exist; choose a new tag: {records}")
+                if method == "protosisa":
+                    if "prototype_temperature" in settings:
+                        raise ValueError("prototype_temperature is no longer supported; remove it from the manifest")
+                    weighting = settings.get("prototype_weighting", "fixed")
+                    slices = settings["slices"][name]
+                    mixture_args = ["--prototype-weighting", weighting]
+                    if weighting == "safe":
+                        if settings.get("prototype_weight") is not None:
+                            raise ValueError("SAFE weighting computes its own weight")
+                    elif weighting == "fixed":
+                        weight = settings.get("prototype_weight", 0.5)
+                        if not isinstance(weight, (int, float)) or not 0 <= weight <= 1:
+                            raise ValueError("ProtoSISA prototype_weight must be in [0, 1]")
+                        mixture_args += ["--prototype-weight", str(weight)]
+                    else:
+                        raise ValueError("ProtoSISA prototype_weighting must be safe or fixed")
+                    if type(slices) is not int or not 1 <= slices <= info["nb_train"] // info["nb_classes"]:
+                        raise ValueError("Invalid ProtoSISA slices")
+                    argv = [sys.executable, "-m", "protosisa", "run", "--model", entry["sisa_model"],
+                            "--dataset", str(metadata), "--container", str(records),
+                            "--requests", str(requests), "--shards", str(info["nb_classes"]),
+                            "--slices", str(slices), "--epochs", str(protocol["epochs"]),
+                            "--batch-size", str(entry["batch_size"]), "--learning-rate", str(entry["learning_rate"]),
+                            "--optimizer", "adamw", "--seed", str(protocol["training_seed"]),
+                            *mixture_args, "--device", "cuda:0"]
+                    add(method, name, argv, {"CUDA_VISIBLE_DEVICES": gpu})
+                    continue
                 argv = ["bash", "example-scripts/common/run_all.sh", entry["sisa_model"],
                         str(metadata), str(settings["shards"]), str(protocol["steps"]), str(records),
                         str(settings["slices"]), str(protocol["epochs"]), str(entry["batch_size"]),
@@ -141,7 +168,7 @@ def main(argv=None):
     parser.add_argument("--manifest", type=Path, default=STUDY / "configs/quick25.json")
     parser.add_argument("--datasets", nargs="+", choices=("cifar10", "cifar100", "sst2"),
                         default=["cifar10", "cifar100", "sst2"])
-    parser.add_argument("--methods", nargs="+", choices=("fcm", "fc", "sisa", "s3t"))
+    parser.add_argument("--methods", nargs="+", choices=("fcm", "fc", "sisa", "protosisa", "s3t"))
     parser.add_argument("--device", default="0")
     parser.add_argument("--tag", default=datetime.now(timezone.utc).strftime("quick25_%Y%m%dT%H%M%S%fZ"))
     parser.add_argument("--s3t-on-exhaustion", choices=("stop", "continue", "retrain"), default="continue")

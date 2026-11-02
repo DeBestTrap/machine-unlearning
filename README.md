@@ -1,4 +1,9 @@
 # Machine Unlearning with SISA
+
+The repository also implements [ProtoSISA](PROTOSISA.md): SISA shard models plus
+a global frozen-feature prototype classifier, using SAFE's published
+size-dependent weighting by default. Run it with `python -m protosisa run --help`, or select
+`--methods protosisa` in the shared comparison study.
 ### Lucas Bourtoule, Varun Chandrasekaran, Christopher Choquette-Choo, Hengrui Jia, Adelin Travers, Baiwu Zhang, David Lie, Nicolas Papernot
 This repository contains the core code used in the SISA experiments of our [Machine Unlearning](https://arxiv.org/abs/1912.03817) paper along with some example scripts.
 

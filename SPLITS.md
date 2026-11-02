@@ -35,7 +35,7 @@ The checked-in JSON manifests are byte-identical to those in `../BlockUnlearn/un
 
 For another holdout size or seed, generate the manifest in BlockUnlearn, copy it into this repo's `splits/`, then update `split_manifest`, `nb_train` and `nb_val` in the dataset's `datasetfile`. Manifest paths are relative to that metadata file. Start a new container. SST-2 preprocessing follows the configured manifest as well.
 
-Code for ProtoSISA, S3T, or other methods can use `configured_manifest(datasetfile)` and the common `load(..., category="train"|"val"|"test")` interface. Code with separate data loaders must apply the saved indices before making its own shards. The checkout currently contains the common SISA implementation; separate implementations must use this interface to share the pools.
+SISA, [ProtoSISA](PROTOSISA.md), and S3T use the saved split pools. Dataset loaders expose `load(..., category="train"|"val"|"test")`; ProtoSISA additionally uses `category="train_eval"` for the same training indices with deterministic evaluation preprocessing. Code with separate data loaders must apply the saved indices before making its own shards. ProtoSISA prototypes contain only retained training examples.
 
 Local positions map to original examples through the saved index list. For example, `manifest['train_indices'][local_training_index]` identifies an original source example. Matching deletion requests across methods requires sharing those source identities separately from the train/validation split.
 

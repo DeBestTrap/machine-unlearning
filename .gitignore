@@ -3,7 +3,7 @@ general-report*
 containers
 saved_models
 .sisa-storage-*/
-cifar-10-batches-py/
+cifar-10-batches-py
 cifar-10-python.tar.gz
 datasets/purchase/2_kmeans.npy
 datasets/purchase/purchase2_test.npy

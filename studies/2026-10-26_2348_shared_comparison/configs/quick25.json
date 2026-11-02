@@ -9,6 +9,14 @@
     "shards": 5,
     "slices": 4
   },
+  "protosisa": {
+    "prototype_weighting": "safe",
+    "slices": {
+      "cifar10": 1,
+      "cifar100": 1,
+      "sst2": 2
+    }
+  },
   "datasets": {
     "cifar10": {
       "split": "cifar10-val2500-seed42.json",

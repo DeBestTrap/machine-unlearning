@@ -35,7 +35,7 @@ val_indices = np.asarray(manifest["val_indices"], dtype=np.int64)
 
 def load(indices, category="train"):
     indices = np.asarray(indices, dtype=np.int64)
-    if category == "train":
+    if category in ("train", "train_eval"):
         source_indices = train_indices[indices]
         return X_train[source_indices], y_train[source_indices]
     if category in ("val", "validation"):

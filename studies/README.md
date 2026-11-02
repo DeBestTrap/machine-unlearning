@@ -13,6 +13,7 @@ outside studies. This follows the organization used by BlockUnlearn.
 | [S3T validation](2026-10-26_0948_s3t_validation/README.md) | Full-pool implementation and replay verification | `2026-10-26_0948_s3t_validation/run.sh` |
 | [S3T LR screening](2026-10-26_1332_s3t_lr_screening/README.md) | BMS/first-slice LR pilots on one ensemble member | `2026-10-26_1332_s3t_lr_screening/run.sh` |
 | [Shared comparison](2026-10-26_2348_shared_comparison/README.md) | Compare methods on the same split and deletion workload | `2026-10-26_2348_shared_comparison/run.sh` |
+| [ProtoSISA 10% pilot](2026-10-30_1555_protosisa_pilot/README.md) | Real CIFAR-10 training, score calibration, confirmation, and deletion check | `2026-10-30_1555_protosisa_pilot/run.py` |
 
 Run shell entry points with `bash` from any working directory, using the training
 environment. Use `--help` and the individual README before launching training.

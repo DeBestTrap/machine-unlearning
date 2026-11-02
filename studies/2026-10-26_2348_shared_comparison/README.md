@@ -172,8 +172,23 @@ the launcher's dry run validates the saved protocol without loading raw data.
 SQuAD's selected configs explicitly share its train/validation split, but SQuAD
 is excluded from this comparison because shared deletion replay does not support
 its overlapping token windows, and the local baselines do not support that task.
-Proto-SISA is not installed in either repo. To add it later, use these exact split
-indices and ordered source IDs through a compatible adapter.
+[ProtoSISA](../../PROTOSISA.md) is available in this repository with the same
+split indices and ordered deletion source IDs. Select it explicitly:
+
+```bash
+python studies/2026-10-26_2348_shared_comparison/run.py \
+  --methods protosisa --device 0 --tag proto25_v1 --dry-run
+```
+
+Its preset uses 10/100/2 shards and 1/1/2 slices for CIFAR-10/CIFAR-100/SST-2,
+with SAFE's published mixture of mean shard logits and unscaled global
+prototype cosine scores: `lambda=exp(-mean_retained_shard_size/100)` for these
+independent shards. Settings live under `protosisa` in `quick25.json`, with
+`prototype_weighting="safe"`. An unscaled fixed mixture requires an explicit
+`prototype_weighting="fixed"` setting and its own weight.
+Remove `--dry-run` to train; use `--methods sisa protosisa s3t` to run all three.
+The existing default method selection remains SISA/S3T. Native ProtoSISA records
+live at `runs/<tag>/protosisa-<dataset>/` and use the shared reporting schema.
 
 ## Launch source and historical results
 

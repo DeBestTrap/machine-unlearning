@@ -85,6 +85,8 @@ def load(indices, category="train"):
     indices = np.asarray(indices, dtype=np.int64)
     if category == "train":
         return select_numpy(train_set, train_indices[indices], use_transforms=True)
+    if category == "train_eval":
+        return select_numpy(val_set, train_indices[indices], use_transforms=True)
     if category in ("val", "validation"):
         return select_numpy(val_set, val_indices[indices], use_transforms=True)
     if category == "test":

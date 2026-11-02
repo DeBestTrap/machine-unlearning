@@ -41,6 +41,40 @@ class SharedComparisonTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "workload checksum differs"):
                 load_protocol(path, ROOT)
 
+    def test_protosisa_uses_paper_shards_safe_weighting_and_shared_workload(self):
+        plan = build_plan(self.protocol, ROOT, ["protosisa"], list(self.protocol["datasets"]), "unit", "cuda:2")
+        for item, shards, slices in zip(plan, (10, 100, 2), (1, 1, 2)):
+            argv = item["argv"]
+            def value(flag):
+                return argv[argv.index(flag) + 1]
+            self.assertEqual(item["method"], "protosisa")
+            self.assertEqual(item["env"]["CUDA_VISIBLE_DEVICES"], "2")
+            self.assertEqual(value("--device"), "cuda:0")
+            self.assertEqual(int(value("--shards")), shards)
+            self.assertEqual(int(value("--slices")), slices)
+            self.assertEqual(value("--prototype-weighting"), "safe")
+            self.assertNotIn("--prototype-weight", argv)
+            self.assertNotIn("--prototype-temperature", argv)
+            self.assertEqual(int(value("--seed")), self.protocol["training_seed"])
+            self.assertEqual(Path(value("--requests")), ROOT / "deletions" / self.protocol["datasets"][item["dataset"]]["workload"])
+            self.assertEqual(Path(value("--container")), STUDY / "runs/unit" / f"protosisa-{item['dataset']}")
+
+    def test_protosisa_fixed_variants_are_explicit_and_safe_rejects_tuning(self):
+        protocol = copy.deepcopy(self.protocol)
+        protocol["protosisa"].update(prototype_weighting="fixed", prototype_weight=0.5)
+        argv = build_plan(protocol, ROOT, ["protosisa"], ["cifar10"], "unit", "0")[0]["argv"]
+        self.assertEqual(argv[argv.index("--prototype-weight") + 1], "0.5")
+        self.assertNotIn("--prototype-temperature", argv)
+        protocol["protosisa"]["prototype_weighting"] = "safe"
+        with self.assertRaisesRegex(ValueError, "computes its own weight"):
+            build_plan(protocol, ROOT, ["protosisa"], ["cifar10"], "unit", "0")
+
+    def test_obsolete_temperature_setting_is_rejected(self):
+        protocol = copy.deepcopy(self.protocol)
+        protocol["protosisa"]["prototype_temperature"] = 0.05
+        with self.assertRaisesRegex(ValueError, "no longer supported"):
+            build_plan(protocol, ROOT, ["protosisa"], ["cifar10"], "unit", "0")
+
     def test_dry_run_from_another_directory_has_no_side_effects(self):
         tag = "unit_dry_run_no_artifacts"
         output = STUDY / "runs" / tag
