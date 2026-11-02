@@ -132,6 +132,11 @@ deletion updates the active predictor rather than purging historical artifacts.
 
 ## Measurements and cleanup
 
+The [expected replay cost calculator](TIMING.md#analytical-expected-replay-cost)
+uses the paper's SISA formula for ProtoSISA's shard training as well. For example,
+`python -m sisa_cost --shards 2 10 100 --slices 1 2` compares normalized costs
+without training. Prototype maintenance adds work outside that analytical model.
+
 Each state saves accuracy, macro/weighted F1, balanced accuracy, confusion matrix,
 and compact prediction/label/score arrays using the shared reporting schema with
 `method=protosisa`. `run.json`, `steps.jsonl`, `evaluations.jsonl`, `report.csv`,

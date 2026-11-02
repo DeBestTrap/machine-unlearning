@@ -1,5 +1,49 @@
 # Comparable SISA and BlockUnlearn update timing
 
+## Analytical expected replay cost
+
+`sisa_cost.py` computes the formula from
+`BlockUnlearn/.paper/sections/appendix_ablations.tex` ("Comparison of expected
+retraining cost") for SISA and ProtoSISA's shard training. For `n` training
+examples after holdout, `s` shards, `r` slices per shard, and `e` nominal epochs:
+
+```text
+expected_examples_per_request = e * n / s * (2/3 + 1/(3*r))
+normalized_expected_cost      = (2/3 + 1/(3*r)) / s
+expected_total_examples       = requests * expected_examples_per_request
+```
+
+The normalized value is a fraction of full retraining (`e * n`). With one slice
+it is `1/s`; with many slices it approaches `2/(3*s)`. These are training example
+visits, counting repeated passes, rather than seconds or unique examples.
+
+Compare every pair in a grid without loading a dataset or training models:
+
+```bash
+python -m sisa_cost --shards 2 4 10 16 100 --slices 1 2 4
+python -m sisa_cost --shards 4 16 --slices 1 2 4 \
+  --training-examples 45000 --epochs 3 --requests 25 --format json
+```
+
+CSV is the default output; redirect stdout to save a table. Without
+`--training-examples`, absolute example counts are left empty (JSON `null`).
+The Python API exposes `normalized_expected_cost(shards, slices)`,
+`expected_cost(shards, slices, training_examples, epochs=..., requests=...)`,
+and `cost_grid(shards, slices, ...)` in the `sisa_cost` module. For example,
+`expected_cost(16, 2, 45000, epochs=3)` gives 7,031.25 expected example visits
+per deletion, or a normalized cost of approximately 0.0520833.
+
+The paper's model assumes equal shard/slice sizes, uniform single-example
+deletions, and fractional `2*e/(r+1)` epochs at every cumulative stage. It ignores
+integer epoch rounding, size remainders, and the removed examples. Multiple
+requests scale this fixed-pool estimate independently; they do not represent
+batched deletion or a shrinking-pool simulation. The trainers use integer epoch
+allocation, so measured training work can differ, especially at small epoch
+budgets. ProtoSISA uses its actual shard count in the same formula; prototype
+rebuilding, inference, checkpoint I/O, and other update overhead are excluded.
+
+## Measured update timing
+
 New measurements use `timing_scope=update_v1` and seconds throughout. Update time
 starts with a resident model and a supplied deletion request and ends when the
 updated state is ready for use. It includes identifying affected shards/blocks,

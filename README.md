@@ -13,6 +13,10 @@ RoBERTa on SST-2, and the shared [data splits](SPLITS.md) and [deletion workload
 
 Start with the [SISA Purchase study](studies/2026-01-09_1800_sisa_purchase/README.md) or the [study index](studies/README.md). Each study keeps its reports beside the associated launch scripts.
 
+Compare analytical expected replay costs for SISA/ProtoSISA shard and slice
+counts with `python -m sisa_cost --shards 4 10 16 --slices 1 2 4`.
+See [the formula, assumptions, and absolute-cost options](TIMING.md#analytical-expected-replay-cost).
+
 ``sisa.py`` is the script that trains a given shard. It should be run as many times as the number of shards.
 
 ## SISA checkpoints and retained run data
