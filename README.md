@@ -16,6 +16,10 @@ Start with the [SISA Purchase study](studies/2026-01-09_1800_sisa_purchase/READM
 Compare analytical expected replay costs for SISA/ProtoSISA shard and slice
 counts with `python -m sisa_cost --shards 4 10 16 --slices 1 2 4`.
 See [the formula, assumptions, and absolute-cost options](TIMING.md#analytical-expected-replay-cost).
+When comparing different epoch budgets, pass `--epochs` and keep
+`--reference-epochs` fixed (default 1). Current SISA/ProtoSISA training requires
+`2*epochs/(slices+1)` to be a positive integer; use
+`sisa_schedule.epochs_per_slice` to reject incompatible search configurations.
 
 ``sisa.py`` is the script that trains a given shard. It should be run as many times as the number of shards.
 

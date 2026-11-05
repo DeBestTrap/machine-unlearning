@@ -75,6 +75,20 @@ class ProtoSISATests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 proto.mix_logits(ensemble, prototype, weight)
 
+    def test_fractional_slice_schedule_rejected_before_creating_a_run(self):
+        args = self.fixture_args()
+        args.epochs = 1
+        with self.assertRaisesRegex(ValueError, "Fractional epochs"):
+            proto.prepare(args, self.device)
+        self.assertFalse(Path("containers/end_to_end").exists())
+        with self.assertRaisesRegex(ValueError, "Fractional epochs"):
+            proto.slice_plan(np.arange(8), [], slices=4, epochs=3)
+
+    def test_whole_slice_schedule_includes_the_remainder_and_retained_members(self):
+        plan = proto.slice_plan(np.arange(7), [2], slices=3, epochs=4)
+        self.assertEqual([passes for _, passes in plan], [2, 2, 2])
+        self.assertEqual([indices.tolist() for indices, _ in plan], [[0, 1], [0, 1, 3], [0, 1, 3, 4, 5, 6]])
+
     def test_safe_weighting_uses_mean_retained_size_without_calibration(self):
         config = dict(prototype_weighting="safe", prototype_weight=None)
         initial = proto.mixture_parameters(config, 4750, 10)

@@ -7,6 +7,7 @@ import torch
 from container_storage import record_directory
 from sharded import fetchShardBatch, getShardHash, sizeOfShard
 from sisa_timing import UpdateTimer, atomic_text
+from sisa_schedule import epochs_per_slice
 
 
 def synchronized_time(device):
@@ -24,6 +25,7 @@ def _link(path, target):
 
 
 def train_shard(args, model, optimizer, loss_fn, device):
+    slice_epochs = epochs_per_slice(args.epochs, args.slices)
     directory = record_directory(args.container)
     from studies.artifacts import verify_run_source
     verify_run_source(directory)
@@ -47,7 +49,6 @@ def train_shard(args, model, optimizer, loss_fn, device):
         if args.slices < 1 or shard_size < args.slices:
             raise ValueError("slices must be between 1 and the shard size")
         slice_size = shard_size // args.slices
-        avg_epochs = 2 * args.slices / (args.slices + 1) * args.epochs / args.slices
         loaded = False
         for sl in range(args.slices):
             slice_hash = getShardHash(args.container, args.label, args.shard, until=(sl + 1) * slice_size)
@@ -55,7 +56,6 @@ def train_shard(args, model, optimizer, loss_fn, device):
             item = timer.slice(sl, slice_hash, reused=checkpoint.exists())
             if not checkpoint.exists():
                 start_epoch, elapsed_training = 0, 0.0
-                slice_epochs = int((sl + 1) * avg_epochs) - int(sl * avg_epochs)
                 if not loaded:
                     recovery = sorted(cache.glob(f"{slice_hash}_*.pt"),
                                       key=lambda path: int(path.stem.rsplit("_", 1)[1]))

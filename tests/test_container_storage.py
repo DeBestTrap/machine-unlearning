@@ -128,12 +128,13 @@ class ContainerStorageTests(unittest.TestCase):
         environment.pop("DELETION_REQUEST_MANIFEST", None)
         directory = self.root / "studies/2026-10-28_1200_fixture/runs/first/sisa-fixture"
         command = ["bash", str(ROOT / "example-scripts/common/run_all.sh"), "purchase",
-                   "fixture_data/datasetfile", "2", "1", str(directory), "2", "2", "2",
+                   "fixture_data/datasetfile", "2", "1", str(directory), "2", "3", "2",
                    "0.01", "sgd", "1", "2", "combined-report"]
         completed = subprocess.run(command, env=environment, capture_output=True, text=True, timeout=90)
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         config = json.loads((directory / "config.json").read_text())
         self.assertEqual(config["hyperparams"]["slices"], 2)
+        self.assertEqual(config["hyperparams"]["epochs"], 3)
         self.assertGreater(checkpoint_summary(directory)["checkpoint_bytes"], 0)
         self.assertFalse(Path("containers").exists())
         report = (directory / "report.csv").read_bytes()

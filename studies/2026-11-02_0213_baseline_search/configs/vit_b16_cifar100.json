@@ -1,0 +1,36 @@
+{
+  "model": "vit",
+  "dataset": "cifar100",
+  "source_root": "/home/tyler/Desktop/Github/BlockUnlearn/unlearning/datasets",
+  "parent_manifest": "/home/tyler/Desktop/Github/BlockUnlearn/unlearning/splits/cifar100-val5000-seed42.json",
+  "development_manifest": "/home/tyler/Desktop/Github/BlockUnlearn/unlearning/splits/cifar100-dev5000-fit60-score20-confirm20-seed42.json",
+  "model_args": {
+    "layers_to_finetune": [
+      "heads",
+      "encoder.ln",
+      "encoder.layers.encoder_layer_8.",
+      "encoder.layers.encoder_layer_9.",
+      "encoder.layers.encoder_layer_10.",
+      "encoder.layers.encoder_layer_11."
+    ],
+    "task_head_initialization": "xavier_uniform"
+  },
+  "trials": 100,
+  "shards": [2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32],
+  "slices": [1, 2, 3, 4, 5, 8],
+  "epochs": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  "lr_bounds": [0.00001, 0.001],
+  "cost_budgets": [0.1, 0.25, 0.5],
+  "reference_epochs": 1,
+  "search_seed": 1729,
+  "training_seed": 1,
+  "confirmation_seeds": [1, 2, 3],
+  "finalists_per_method_budget": 3,
+  "batch_size": 32,
+  "optimizer": "adamw",
+  "dropout_rate": 0.0,
+  "threads": 4,
+  "maximum_gpu_power_watts": 250,
+  "minimum_free_gb": 20,
+  "checkpoint_retention": "scores_only"
+}

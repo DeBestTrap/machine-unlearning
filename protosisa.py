@@ -27,6 +27,7 @@ from reporting import classification_evaluation, digest, manifest, step_record, 
 from reporting.core import atomic_text, hardware, runtime_provenance, write_json
 from reporting.timing import OperationTimer, total_timing
 from sisa_timing import UpdateTimer
+from sisa_schedule import epochs_per_slice
 from sisa_training import synchronized_time
 from split_support import bind_container_split, configured_manifest, validate_container_split
 from studies.artifacts import verify_run_source
@@ -74,10 +75,14 @@ def build_encoder(model_name, device):
         from torchvision.models import ViT_B_16_Weights, vit_b_16
         encoder = vit_b_16(weights=ViT_B_16_Weights.IMAGENET1K_V1)
         encoder.heads = nn.Identity()
+    elif model_name == "resnet50":
+        from torchvision.models import ResNet50_Weights, resnet50
+        encoder = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
+        encoder.fc = nn.Identity()
     elif model_name == "roberta":
         encoder = RobertaFeatures()
     else:
-        raise ValueError("ProtoSISA frozen features support vit and roberta")
+        raise ValueError("ProtoSISA frozen features support vit, resnet50 and roberta")
     return encoder.to(device).requires_grad_(False).eval()
 
 
@@ -161,13 +166,13 @@ def mixture_parameters(config, training_examples, shards):
 
 
 def slice_plan(shard, deleted, slices, epochs):
-    """SISA cumulative slices with its nominal epoch redistribution, including the tail."""
+    """SISA cumulative prefixes with whole epochs at each stage, including the tail."""
+    passes = epochs_per_slice(epochs, slices)
     size = len(shard)
     if not 1 <= slices <= size:
         raise ValueError("slices must be between 1 and the initial shard size")
-    avg_epochs = 2 * epochs / (slices + 1)
     return [(retained_indices(shard[:size if i == slices - 1 else (i + 1) * (size // slices)], deleted),
-             int((i + 1) * avg_epochs) - int(i * avg_epochs)) for i in range(slices)]
+             passes) for i in range(slices)]
 
 
 def checkpoint_paths(directory, config, shard_id, shard, deleted):
@@ -321,12 +326,13 @@ def evaluate(directory, config, paths, prototypes, step, loader, encoder, device
 
 
 def validate_options(args, info):
-    if args.model not in ("vit", "roberta"):
-        raise ValueError("ProtoSISA supports vit and roberta")
+    if args.model not in ("vit", "resnet50", "roberta"):
+        raise ValueError("ProtoSISA supports vit, resnet50 and roberta")
     if args.shards is None:
         args.shards = info["nb_classes"]
     if args.slices is None:
         args.slices = 2 if args.model == "roberta" else 1
+    epochs_per_slice(args.epochs, args.slices)
     if (args.shards < 1 or args.slices < 1 or args.shards * args.slices > info["nb_train"]
             or args.epochs < 1 or args.batch_size < 1 or info[f"nb_{args.eval_split}"] < 1):
         raise ValueError("Invalid shard, slice, epoch, batch or evaluation size")
@@ -418,7 +424,7 @@ def run(args, *, model_factory=build_model, encoder_factory=build_encoder):
     shards = np.load(directory / "splitfile.npy", allow_pickle=True)
     run_manifest = manifest(run_id=config["comparison_run_id"], method="protosisa",
         dataset=split["dataset_id"] if split else Path(args.dataset).parent.name,
-        model={"vit": "vit_b_16", "roberta": "roberta-base"}[config["model"]],
+        model={"vit": "vit_b_16", "resnet50": "resnet50", "roberta": "roberta-base"}[config["model"]],
         config={key: value for key, value in config.items() if key not in ("comparison_run_id", "provenance", "hardware")},
         split_sha256=config["split_sha256"], workload_sha256=config["workload_sha256"],
         requested_steps=config["deletion_steps"], seed=config["seed"],
@@ -465,7 +471,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     command = commands.add_parser("run", help="Train, replay shared deletions, and evaluate every state")
-    command.add_argument("--model", choices=("vit", "roberta"), required=True)
+    command.add_argument("--model", choices=("vit", "resnet50", "roberta"), required=True)
     command.add_argument("--dataset", required=True)
     command.add_argument("--container", required=True, help="Container name or local study run directory")
     command.add_argument("--requests", help="Portable ordered deletion workload; omit for initial training only")

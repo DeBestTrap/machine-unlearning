@@ -16,3 +16,4 @@ studies/.migration/
 /report-*.csv
 /r-vit.csv
 /studies/*/reports/*/
+/studies/2026-11-02_0213_baseline_search/runs/

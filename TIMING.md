@@ -5,42 +5,74 @@
 `sisa_cost.py` computes the formula from
 `BlockUnlearn/.paper/sections/appendix_ablations.tex` ("Comparison of expected
 retraining cost") for SISA and ProtoSISA's shard training. For `n` training
-examples after holdout, `s` shards, `r` slices per shard, and `e` nominal epochs:
+examples after holdout, `s` shards, `r` slices per shard, `e` candidate nominal
+epochs, and a fixed common full-retraining budget `e_ref`:
 
 ```text
 expected_examples_per_request = e * n / s * (2/3 + 1/(3*r))
-normalized_expected_cost      = (2/3 + 1/(3*r)) / s
+normalized_expected_cost      = (e / e_ref) * (2/3 + 1/(3*r)) / s
 expected_total_examples       = requests * expected_examples_per_request
 ```
 
-The normalized value is a fraction of full retraining (`e * n`). With one slice
-it is `1/s`; with many slices it approaches `2/(3*s)`. These are training example
-visits, counting repeated passes, rather than seconds or unique examples.
+The normalized value is a fraction of the common reference (`e_ref * n`),
+with `e_ref=1` by default. Keep this reference fixed across methods and candidates:
+doubling candidate epochs doubles both absolute and normalized replay costs.
+When `e=e_ref`, one slice costs `1/s`; many slices approach `2/(3*s)`.
+These are training example visits, counting repeated passes, rather than seconds
+or unique examples. Previously, normalization divided by each candidate's own
+`e * n` and hid epoch differences; passing `--reference-epochs` equal to `--epochs`
+reproduces that older interpretation for an individual configuration.
 
 Compare every pair in a grid without loading a dataset or training models:
 
 ```bash
 python -m sisa_cost --shards 2 4 10 16 100 --slices 1 2 4
 python -m sisa_cost --shards 4 16 --slices 1 2 4 \
-  --training-examples 45000 --epochs 3 --requests 25 --format json
+  --training-examples 45000 --epochs 15 --reference-epochs 1 --requests 25 --format json
 ```
 
 CSV is the default output; redirect stdout to save a table. Without
 `--training-examples`, absolute example counts are left empty (JSON `null`).
-The Python API exposes `normalized_expected_cost(shards, slices)`,
+The Python API exposes
+`normalized_expected_cost(shards, slices, epochs=..., reference_epochs=...)`,
 `expected_cost(shards, slices, training_examples, epochs=..., requests=...)`,
-and `cost_grid(shards, slices, ...)` in the `sisa_cost` module. For example,
+and `cost_grid(shards, slices, ..., reference_epochs=...)` in `sisa_cost`. For example,
 `expected_cost(16, 2, 45000, epochs=3)` gives 7,031.25 expected example visits
-per deletion, or a normalized cost of approximately 0.0520833.
+per deletion, or a normalized cost of 0.15625 against one epoch of full retraining.
+Changing the reference budget changes only normalized costs, not absolute work.
 
 The paper's model assumes equal shard/slice sizes, uniform single-example
-deletions, and fractional `2*e/(r+1)` epochs at every cumulative stage. It ignores
-integer epoch rounding, size remainders, and the removed examples. Multiple
+deletions, and `2*e/(r+1)` epochs at every cumulative stage. It ignores
+size remainders and the removed examples. Multiple
 requests scale this fixed-pool estimate independently; they do not represent
-batched deletion or a shrinking-pool simulation. The trainers use integer epoch
-allocation, so measured training work can differ, especially at small epoch
-budgets. ProtoSISA uses its actual shard count in the same formula; prototype
+batched deletion or a shrinking-pool simulation. The analytical calculator still
+accepts fractional schedules for historical/theoretical comparisons; this does
+not establish that a configuration is eligible for current training.
+ProtoSISA uses its actual shard count in the same formula; prototype
 rebuilding, inference, checkpoint I/O, and other update overhead are excluded.
+
+### Whole-epoch training eligibility
+
+Both SISA and ProtoSISA require positive integer nominal epochs and slices,
+and a positive integer value for `2*epochs/(slices+1)`. Fractional schedules are
+rejected before training instead of rounding or silently skipping stages.
+Use `sisa_schedule.epochs_per_slice(epochs, slices)` to filter a search space;
+it returns the whole number of passes per prefix or raises `ValueError`.
+
+| Slices | Allowed nominal epochs | Passes per prefix at the minimum |
+| --- | --- | --- |
+| 1 | 1, 2, 3, ... | 1 |
+| 2 | 3, 6, 9, ... | 2 |
+| 3 | 2, 4, 6, ... | 1 |
+| 4 | 5, 10, 15, ... | 2 |
+| 5 | 3, 6, 9, ... | 1 |
+
+This is stricter than merely requiring at least one pass after rounding.
+With equal-sized slices, eligible schedules process exactly `epochs * n`
+examples across the initial ensemble, and the analytical replay model needs
+no epoch-rounding correction. Uneven slices and deletions still cause small
+differences from the nominal model. Historical fractional-schedule runs retain
+their saved results and require their original launch source to resume.
 
 ## Measured update timing
 

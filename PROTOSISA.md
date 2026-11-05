@@ -60,15 +60,17 @@ python -m protosisa run --model vit \
 python -m protosisa run --model roberta \
   --dataset datasets/sst2/datasetfile --container proto-sst2-v1 \
   --requests deletions/glue-sst2-seed123-25x1.json \
-  --epochs 1 --batch-size 32 --learning-rate 0.00001 --device cuda:0
+  --epochs 3 --batch-size 32 --learning-rate 0.00001 --device cuda:0
 ```
 
 Omit `--requests` for initial training and evaluation only. `--shards`,
 `--slices`, `--prototype-weighting`, `--seed`, `--optimizer`, `--dropout-rate`, and
 `--eval-split val|test` allow explicit variants. The defaults use seed 1, AdamW,
-one nominal SISA epoch, and test evaluation. Standalone learning rate defaults
-to 0.0001; set 0.00001 for the SST-2 comparison. Only ViT and RoBERTa feature
-encoders are supported.
+one nominal SISA epoch, and test evaluation. The two-slice RoBERTa default
+requires an explicit compatible epoch count, such as `--epochs 3`.
+Standalone learning rate defaults
+to 0.0001; set 0.00001 for the SST-2 comparison. ViT, ImageNet V2 ResNet-50,
+and RoBERTa feature encoders are supported.
 
 The [10% CIFAR-10 pilot](studies/2026-10-30_1555_protosisa_pilot/README.md)
 compares the initial one-epoch setup with three epochs. Its SAFE-weighting
@@ -99,8 +101,12 @@ permutation assigns every training example to exactly one shard. Portable
 source IDs are translated to local training indices by the existing deletion
 exporter; validation/test examples never enter either training component.
 
-Shard training uses SISA's cumulative prefixes and integer epoch allocation
-(`2 * nominal_epochs / (slices + 1)` epochs per slice before rounding).
+Shard training uses SISA's cumulative prefixes with
+`2 * nominal_epochs / (slices + 1)` epochs per slice. This must be a positive
+integer; fractional schedules are rejected before creating a run. For example,
+two slices require nominal epochs 3, 6, 9, ...; four require 5, 10, 15, ... .
+Both training paths share `sisa_schedule.epochs_per_slice` for search filtering.
+See [schedule eligibility and cost normalization](TIMING.md#whole-epoch-training-eligibility).
 The last prefix includes all remainder examples. Deletion restores the last
 unaffected slice boundary and retrains later prefixes. Slice checkpoints include
 model **and optimizer** state. Per-shard initialization and per-slice RNG seeds
@@ -110,7 +116,8 @@ tests compare deletion results to fresh retained-data training exactly. GPU
 kernel nondeterminism can still affect bitwise reproducibility.
 
 The frozen encoder is separate from all task-trained models. ViT uses the
-ImageNet-pretrained CLS representation before its classification head; RoBERTa
+ImageNet-pretrained CLS representation before its classification head; ResNet-50
+uses ImageNet V2 pooled features before its fc head; RoBERTa
 uses the pretrained final-layer CLS token with a padding attention mask.
 `train_eval` selects the same training indices with deterministic evaluation
 preprocessing, so CIFAR prototypes do not depend on random crops. Unit feature
@@ -135,7 +142,10 @@ deletion updates the active predictor rather than purging historical artifacts.
 The [expected replay cost calculator](TIMING.md#analytical-expected-replay-cost)
 uses the paper's SISA formula for ProtoSISA's shard training as well. For example,
 `python -m sisa_cost --shards 2 10 100 --slices 1 2` compares normalized costs
-without training. Prototype maintenance adds work outside that analytical model.
+without training. Pass candidate `--epochs` and keep `--reference-epochs` fixed
+across candidates to account for additional training. The calculator can also
+evaluate historical fractional schedules; current trainers reject those.
+Prototype maintenance adds work outside that analytical model.
 
 Each state saves accuracy, macro/weighted F1, balanced accuracy, confusion matrix,
 and compact prediction/label/score arrays using the shared reporting schema with

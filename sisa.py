@@ -76,6 +76,12 @@ parser.add_argument(
 parser.add_argument("--eval_split", choices=("test", "val"), default="test")
 parser.add_argument("--seed", type=int, default=os.environ.get("SISA_SEED"), help="Base RNG seed; each shard uses seed + shard")
 args = parser.parse_args()
+if args.train:
+    from sisa_schedule import epochs_per_slice
+    try:
+        epochs_per_slice(args.epochs, args.slices)
+    except ValueError as error:
+        parser.error(str(error))
 if args.seed is not None:
     if not 0 <= args.seed < 2**32:
         parser.error("seed must be an integer in [0, 2**32)")

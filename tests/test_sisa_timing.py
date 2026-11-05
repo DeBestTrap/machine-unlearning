@@ -86,6 +86,13 @@ class SISATimingTests(unittest.TestCase):
         clear_models(["fixture"])
         self.assertEqual(summarize("fixture", "0", 1)["update_time_sec"], 16.5)
 
+    def test_fractional_schedule_rejected_before_writing_timing_or_checkpoints(self):
+        self.args.slices, self.args.epochs = 3, 1
+        with self.assertRaisesRegex(ValueError, "Fractional epochs"):
+            self.run_training()
+        self.assertFalse(list((self.directory / "cache").glob("*.pt")))
+        self.assertFalse(list((self.directory / "times").glob("*.json")))
+
     def test_reused_slices_do_not_reuse_an_earlier_requests_training_cost(self):
         self.run_training()
         self.args.label = "1"
