@@ -152,6 +152,8 @@ def run_path(run, candidate, pool, seed):
 
 
 def read_plan(run):
+    if not (run / "plan.json").is_file():
+        raise ValueError(f"S3T run has no completed preparation plan: {run}; rerun with 'run --config ... --name ...'")
     verify_run_source(run)
     plan = signed_read(run / "plan.json")
     settings = plan["settings"]
@@ -206,6 +208,25 @@ def prepare(config_path, name, data_root):
         confirmation_planned=None, active={}, errors=[]))
     print(f"Prepared {len(candidates)} complete-ensemble S3T candidates: {run}; no training started", flush=True)
     return run
+
+
+def archive_incomplete_preparation(run):
+    """Preserve an interrupted preparation before retrying it from scratch."""
+    if not run.exists():
+        return None
+    if run.is_symlink() or not run.is_dir() or (run / "plan.json").exists():
+        raise ValueError(f"Cannot archive a prepared or non-directory S3T run: {run}")
+    allowed = {"launch_source", "study_run.json", "inputs", "progress.json"}
+    unexpected = {path.name for path in run.iterdir()} - allowed
+    if unexpected:
+        raise ValueError(f"S3T run has no plan but contains other files: {run}: {sorted(unexpected)}")
+    suffix = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    archive = run.with_name(f"{run.name}.incomplete-{suffix}")
+    if archive.exists():
+        raise ValueError(f"Incomplete-preparation archive already exists: {archive}")
+    run.rename(archive)
+    print(f"Preserved interrupted preparation at {archive}", flush=True)
+    return archive
 
 
 def result(run, candidate, pool, seed):
@@ -507,6 +528,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.action in ("prepare", "run"):
         run = STUDY / "runs" / args.name
+        if run.exists() and not (run / "plan.json").is_file():
+            archive_incomplete_preparation(run)
         if not run.exists():
             prepare(args.config, args.name, args.data_root)
         elif args.action == "prepare":

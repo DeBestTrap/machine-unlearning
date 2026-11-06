@@ -110,6 +110,20 @@ class S3TAllocationSearchTests(unittest.TestCase):
             self.assertEqual(len(selected), 3)
             self.assertEqual({int(row["shard_band"]) for row in selected}, {0, 1, 2})
 
+    def test_interrupted_preparation_is_preserved_before_retry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = Path(temporary) / "trial"
+            (run / "inputs").mkdir(parents=True)
+            (run / "inputs/parent.json").write_text("partial")
+            archive = search.archive_incomplete_preparation(run)
+            self.assertFalse(run.exists())
+            self.assertEqual((archive / "inputs/parent.json").read_text(), "partial")
+            run.mkdir()
+            (run / "search").mkdir()
+            with self.assertRaisesRegex(ValueError, "contains other files"):
+                search.archive_incomplete_preparation(run)
+            self.assertTrue((run / "search").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

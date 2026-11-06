@@ -59,7 +59,10 @@ server; the bundled configs leave it unset.
 
 `prepare` accepts the same `--config`, `--name`, and `--data-root` arguments and
 validates the source fingerprints without training. `run` auto-prepares if the
-named run does not exist. Each run lives under `runs/<name>/`, with a signed
+named run does not exist. If preparation was interrupted before `plan.json` was
+written, the same command preserves the incomplete folder with an
+`.incomplete-<timestamp>` suffix and prepares the named run again. Each run
+lives under `runs/<name>/`, with a signed
 `plan.json`, copied manifests, exact launch-source snapshot, native trial
 records, `progress.json`, individual `worker.log` files, and CSV reports.
 Completed candidate model weights are discarded after validation scoring;
