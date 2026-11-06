@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, Subset, TensorDataset
 
-from dataset_splits import fingerprint_cifar, load_manifest, split_indices
+from dataset_splits import _json, fingerprint_cifar, load_manifest, split_indices
 from .config import ROOT, resolve_path
 
 
@@ -27,7 +27,7 @@ class ImageSubset(Dataset):
 class DataBundle:
     train: Dataset
     val: Dataset
-    test: Dataset
+    test: Dataset | None
     source_ids: list[int]
     split: dict
     num_classes: int
@@ -53,6 +53,51 @@ def _manifest_path(config):
     return ROOT / "splits" / name
 
 
+def development_split(config, parent):
+    """Validate the fixed 10% source-index pools and select one evaluation pool."""
+    path = resolve_path(config.development_manifest)
+    value = json.loads(path.read_text())
+    checksum = value.pop("manifest_sha256", None)
+    if checksum != hashlib.sha256(_json(value).encode()).hexdigest():
+        raise ValueError("Development manifest checksum mismatch")
+    value["manifest_sha256"] = checksum
+    fit, score, confirm = (value[key] for key in
+                           ("train_indices", "val_indices", "confirmation_indices"))
+    source_size = parent["source_size"]
+    if (value.get("schema_version") != 2 or value.get("purpose") != "allocation_search"
+            or value.get("source_split") != "train" or value.get("pool_source") != "fixed_validation"
+            or value.get("dataset_id") != parent["dataset_id"]
+            or value.get("source_size") != source_size
+            or value.get("source_sha256") != parent["source_sha256"]
+            or value.get("parent_manifest_sha256") != parent["manifest_sha256"]
+            or value.get("split_seed") != 42 or parent["split_seed"] != 42
+            or not value.get("stratified") or not parent["stratified"]
+            or len(parent["val_indices"]) * 10 != source_size
+            or [len(fit), len(score), len(confirm)] != [3000, 1000, 1000]
+            or sorted(fit + score + confirm) != sorted(parent["val_indices"])
+            or len(set(fit + score + confirm)) != 5000
+            or set(confirm) & set(value.get("confirmation_excluded_indices", []))):
+        raise ValueError("Development memberships disagree with the fixed 10% protocol")
+    selected = score if config.development_pool == "scoring" else confirm
+    effective = {**value, "val_indices": selected, "evaluation_pool": config.development_pool,
+                 "purpose": "s3t_development_" + config.development_pool,
+                 "development_manifest_sha256": checksum}
+    effective.pop("manifest_sha256")
+    effective["manifest_sha256"] = hashlib.sha256(_json(effective).encode()).hexdigest()
+    return effective
+
+
+def load_saved_split(path, config):
+    if config.development_manifest is None:
+        return load_manifest(path)
+    parent = load_manifest(_manifest_path(config))
+    expected = development_split(config, parent)
+    saved = json.loads(path.read_text())
+    if saved != expected:
+        raise ValueError("Saved S3T development split differs from its manifests")
+    return saved
+
+
 def _cap(bundle, config):
     if config.max_train_examples is not None and config.max_train_examples < len(bundle.train):
         chosen = np.random.default_rng(config.partition_seed).permutation(len(bundle.train))[:config.max_train_examples]
@@ -60,9 +105,10 @@ def _cap(bundle, config):
         bundle.source_ids = [bundle.source_ids[i] for i in chosen]
     if config.max_eval_examples is not None:
         bundle.val = Subset(bundle.val, list(range(min(len(bundle.val), config.max_eval_examples))))
-        bundle.test = Subset(bundle.test, list(range(min(len(bundle.test), config.max_eval_examples))))
+        if bundle.test is not None:
+            bundle.test = Subset(bundle.test, list(range(min(len(bundle.test), config.max_eval_examples))))
     bundle.__post_init__()
-    if not len(bundle.val) or not len(bundle.test):
+    if not len(bundle.val) or (bundle.test is not None and not len(bundle.test)):
         raise ValueError("Validation and test pools must be nonempty")
     return bundle
 
@@ -97,10 +143,11 @@ def load_data(config, preprocessing=None):
     if config.dataset.startswith("cifar"):
         from torchvision import datasets, transforms
         cls = datasets.CIFAR10 if config.dataset == "cifar10" else datasets.CIFAR100
-        source = cls(str(root), train=True, download=False)
-        test = cls(str(root), train=False, download=False)
-        split = load_manifest(_manifest_path(config), dataset_id=config.dataset, source_size=len(source),
-                              source_sha256=fingerprint_cifar(source.data, source.targets))
+        source = cls(str(root), train=True, download=bool(config.development_manifest))
+        test = None if config.development_manifest else cls(str(root), train=False, download=False)
+        parent = load_manifest(_manifest_path(config), dataset_id=config.dataset, source_size=len(source),
+                               source_sha256=fingerprint_cifar(source.data, source.targets))
+        split = development_split(config, parent) if config.development_manifest else parent
         if preprocessing is None:
             if config.model == "hf_vit":
                 from transformers import AutoImageProcessor
@@ -121,7 +168,8 @@ def load_data(config, preprocessing=None):
                                               transforms.ToTensor(), normalize])
         bundle = DataBundle(ImageSubset(source, split["train_indices"], train_transform),
                             ImageSubset(source, split["val_indices"], eval_transform),
-                            ImageSubset(test, range(len(test)), eval_transform), split["train_indices"], split,
+                            ImageSubset(test, range(len(test)), eval_transform) if test is not None else None,
+                            split["train_indices"], split,
                             10 if config.dataset == "cifar10" else 100, preprocessing)
     else:
         path = root / "datasets" / "sst2"

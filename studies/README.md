@@ -12,6 +12,7 @@ outside studies. This follows the organization used by BlockUnlearn.
 | [SISA Purchase](2026-01-09_1800_sisa_purchase/README.md) | Historical reports and available sharding/LR recipes | `2026-01-09_1800_sisa_purchase/run.sh` |
 | [S3T validation](2026-10-26_0948_s3t_validation/README.md) | Full-pool implementation and replay verification | `2026-10-26_0948_s3t_validation/run.sh` |
 | [S3T LR screening](2026-10-26_1332_s3t_lr_screening/README.md) | BMS/first-slice LR pilots on one ensemble member | `2026-10-26_1332_s3t_lr_screening/run.sh` |
+| [S3T development allocation search](2026-11-05_2252_s3t_allocation_search/README.md) | Complete-ensemble ViT and ResNet-50 configuration searches on fixed development pools | `2026-11-05_2252_s3t_allocation_search/run.sh` |
 | [Shared comparison](2026-10-26_2348_shared_comparison/README.md) | Compare methods on the same split and deletion workload | `2026-10-26_2348_shared_comparison/run.sh` |
 | [ProtoSISA 10% pilot](2026-10-30_1555_protosisa_pilot/README.md) | Real CIFAR-10 training, score calibration, confirmation, and deletion check | `2026-10-30_1555_protosisa_pilot/run.py` |
 

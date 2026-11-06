@@ -33,6 +33,16 @@ def build_backbone(config, num_classes, saved_spec=None):
             model = ViTForImageClassification(hf_config)
         spec = {"kind": "hf_vit", "model": name, "num_classes": num_classes,
                 "hf_config": model.config.to_dict()}
+    elif config.model == "resnet50":
+        from torchvision.models import ResNet50_Weights, resnet50
+        if config.model_name not in (None, "IMAGENET1K_V2"):
+            raise ValueError("resnet50 currently supports IMAGENET1K_V2 weights")
+        model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2 if pretrained else None)
+        model.fc = nn.Linear(model.fc.in_features, num_classes)
+        nn.init.xavier_uniform_(model.fc.weight, gain=1.0)
+        nn.init.zeros_(model.fc.bias)
+        spec = {"kind": "torchvision_resnet", "model": "resnet50", "num_classes": num_classes,
+                "weights": "IMAGENET1K_V2" if config.pretrained else None}
     else:
         from transformers import RobertaConfig, RobertaForSequenceClassification
         name = config.model_name or "roberta-base"

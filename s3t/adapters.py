@@ -35,6 +35,40 @@ class LoRALinear(nn.Module):
         return result
 
 
+class LoRAConvDelta(nn.Module):
+    """A 1x1 reduction followed by a convolution with the base kernel geometry."""
+    def __init__(self, base, rank, alpha, dropout, scaling, stage):
+        super().__init__()
+        if base.groups != 1 or base.padding_mode != "zeros":
+            raise ValueError("ResNet LoRA supports ungrouped zero-padded convolutions")
+        self.a = nn.Parameter(torch.empty(rank, base.in_channels, 1, 1))
+        self.b = nn.Parameter(torch.zeros(base.out_channels, rank, *base.kernel_size))
+        nn.init.kaiming_uniform_(self.a, a=math.sqrt(5))
+        self.scale = alpha / (math.sqrt(rank) if scaling == "rslora" else rank)
+        self.dropout = nn.Dropout2d(dropout)
+        self.stride, self.padding, self.dilation = base.stride, base.padding, base.dilation
+        self.stage, self.enabled = stage, False
+
+    def forward(self, inputs):
+        reduced = F.conv2d(self.dropout(inputs), self.a)
+        return F.conv2d(reduced, self.b, stride=self.stride,
+                        padding=self.padding, dilation=self.dilation) * self.scale
+
+
+class LoRAConv2d(nn.Module):
+    def __init__(self, base, **kwargs):
+        super().__init__()
+        self.base = base
+        self.delta = LoRAConvDelta(base, **kwargs)
+        self.base.requires_grad_(False)
+
+    def forward(self, inputs):
+        result = self.base(inputs)
+        if self.delta.enabled:
+            result = result + self.delta(inputs)
+        return result
+
+
 class LoRASelfAttention(nn.Module):
     """torchvision ViT's batch-first self attention, with Q/V LoRA branches.
 
@@ -96,11 +130,14 @@ class S3TModel(nn.Module):
         elif kind == "roberta":
             layers = list(backbone.roberta.encoder.layer)
             self.head_path = "classifier"
+        elif kind == "torchvision_resnet":
+            layers = [backbone.layer1, backbone.layer2, backbone.layer3, backbone.layer4]
+            self.head_path = "fc"
         else:
             raise ValueError(f"Unsupported model kind: {kind}")
         width = config.layers_per_slice or len(layers) // config.slices
         if width < 1 or width * config.slices > len(layers):
-            raise ValueError("slices * layers_per_slice must fit in the transformer depth")
+            raise ValueError("slices * layers_per_slice must fit in the model depth")
         self.layer_groups = []
         for stage in range(config.slices):
             group = list(range(len(layers) - 1 - stage * width, len(layers) - 1 - (stage + 1) * width, -1))
@@ -111,6 +148,10 @@ class S3TModel(nn.Module):
                 layer = layers[index]
                 if kind == "torchvision_vit":
                     layer.self_attention = LoRASelfAttention(layer.self_attention, **kwargs)
+                elif kind == "torchvision_resnet":
+                    for block in layer:
+                        block.conv2 = LoRAConv2d(block.conv2, **kwargs)
+                        block.conv3 = LoRAConv2d(block.conv3, **kwargs)
                 else:
                     attention = layer.attention.attention if kind == "hf_vit" else layer.attention.self
                     attention.query = LoRALinear(attention.query, **kwargs)
@@ -126,15 +167,26 @@ class S3TModel(nn.Module):
         return self.backbone.get_submodule(self.head_path)
 
     def deltas(self):
-        return [(name, module) for name, module in self.named_modules() if isinstance(module, LoRADelta)]
+        return [(name, module) for name, module in self.named_modules()
+                if isinstance(module, (LoRADelta, LoRAConvDelta))]
 
     def forward(self, inputs):
-        if self.kind == "torchvision_vit":
+        if self.kind in ("torchvision_vit", "torchvision_resnet"):
             return self.backbone(inputs)
         if self.kind == "hf_vit":
             return self.backbone(pixel_values=inputs).logits
         return self.backbone(input_ids=inputs,
                              attention_mask=inputs.ne(self.backbone.config.pad_token_id)).logits
+
+    def train(self, mode=True):
+        super().train(mode)
+        if self.kind == "torchvision_resnet":
+            # The engine calls train() at every epoch. Keep frozen backbone BN
+            # buffers stable in every stage and in saved-prefix reconstruction.
+            for module in self.modules():
+                if isinstance(module, nn.modules.batchnorm._BatchNorm):
+                    module.eval()
+        return self
 
     def begin_stage(self, stage):
         if not 0 <= stage < self.config.slices or stage != len(self.head_history):

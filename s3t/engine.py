@@ -13,12 +13,11 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
 from deletion_requests import load_workload, local_batches
-from dataset_splits import load_manifest
 from .adapters import S3TModel, cpu_state
 from .artifacts import (atomic_json, atomic_torch, choose_device, cpu_tree, file_hash, lock,
                         provenance, read_json, seed_everything, seed_for, seed_worker, synchronize)
 from .config import Config
-from .data import load_data
+from .data import load_data, load_saved_split
 from .models import build_backbone
 from .partition import Partition, digest
 from .sequences import select_sequences
@@ -83,7 +82,7 @@ class Run:
         if self.metadata["config_sha256"] != digest(self.config.to_dict()):
             raise ValueError("Run configuration changed; create a new run")
         self.spec = read_json(self.directory / "backbone.json")
-        self.split = load_manifest(self.directory / "dataset_split.json")
+        self.split = load_saved_split(self.directory / "dataset_split.json", self.config)
         if self.metadata["split_sha256"] != self.split["manifest_sha256"]:
             raise ValueError("Saved dataset split differs from run metadata")
         if self.metadata["backbone_sha256"] != file_hash(self.directory / "backbone.pt"):
@@ -440,6 +439,8 @@ class Run:
     def evaluate(self, device="auto", split="test", *, step=None, cache=True):
         if split not in ("val", "test"):
             raise ValueError("Evaluation split must be val or test")
+        if split == "test" and self.config.development_manifest is not None:
+            raise ValueError("Development-only S3T runs have no official test dataset")
         device = choose_device(device)
         self._record_execution_device(device)
         with lock(self.directory / ".lifecycle.lock", shared=True):
