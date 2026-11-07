@@ -133,6 +133,9 @@ class S3TModel(nn.Module):
         elif kind == "torchvision_resnet":
             layers = [backbone.layer1, backbone.layer2, backbone.layer3, backbone.layer4]
             self.head_path = "fc"
+        elif kind == "torchvision_densenet":
+            layers = [getattr(backbone.features, f"denseblock{i}") for i in range(1, 5)]
+            self.head_path = "classifier"
         else:
             raise ValueError(f"Unsupported model kind: {kind}")
         width = config.layers_per_slice or len(layers) // config.slices
@@ -152,6 +155,10 @@ class S3TModel(nn.Module):
                     for block in layer:
                         block.conv2 = LoRAConv2d(block.conv2, **kwargs)
                         block.conv3 = LoRAConv2d(block.conv3, **kwargs)
+                elif kind == "torchvision_densenet":
+                    for dense_layer in layer.children():
+                        dense_layer.conv1 = LoRAConv2d(dense_layer.conv1, **kwargs)
+                        dense_layer.conv2 = LoRAConv2d(dense_layer.conv2, **kwargs)
                 else:
                     attention = layer.attention.attention if kind == "hf_vit" else layer.attention.self
                     attention.query = LoRALinear(attention.query, **kwargs)
@@ -171,7 +178,7 @@ class S3TModel(nn.Module):
                 if isinstance(module, (LoRADelta, LoRAConvDelta))]
 
     def forward(self, inputs):
-        if self.kind in ("torchvision_vit", "torchvision_resnet"):
+        if self.kind in ("torchvision_vit", "torchvision_resnet", "torchvision_densenet"):
             return self.backbone(inputs)
         if self.kind == "hf_vit":
             return self.backbone(pixel_values=inputs).logits
@@ -180,7 +187,7 @@ class S3TModel(nn.Module):
 
     def train(self, mode=True):
         super().train(mode)
-        if self.kind == "torchvision_resnet":
+        if self.kind in ("torchvision_resnet", "torchvision_densenet"):
             # The engine calls train() at every epoch. Keep frozen backbone BN
             # buffers stable in every stage and in saved-prefix reconstruction.
             for module in self.modules():

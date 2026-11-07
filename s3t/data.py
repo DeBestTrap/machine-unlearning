@@ -72,10 +72,12 @@ def development_split(config, parent):
             or value.get("parent_manifest_sha256") != parent["manifest_sha256"]
             or value.get("split_seed") != 42 or parent["split_seed"] != 42
             or not value.get("stratified") or not parent["stratified"]
-            or len(parent["val_indices"]) * 10 != source_size
-            or [len(fit), len(score), len(confirm)] != [3000, 1000, 1000]
+            or len(parent["val_indices"]) != source_size // 10
+            or [len(fit), len(score), len(confirm)] != [len(parent["val_indices"]) - 2 * (len(parent["val_indices"]) // 5),
+                                                       len(parent["val_indices"]) // 5,
+                                                       len(parent["val_indices"]) // 5]
             or sorted(fit + score + confirm) != sorted(parent["val_indices"])
-            or len(set(fit + score + confirm)) != 5000
+            or len(set(fit + score + confirm)) != len(parent["val_indices"])
             or set(confirm) & set(value.get("confirmation_excluded_indices", []))):
         raise ValueError("Development memberships disagree with the fixed 10% protocol")
     selected = score if config.development_pool == "scoring" else confirm
@@ -174,7 +176,7 @@ def load_data(config, preprocessing=None):
     else:
         path = root / "datasets" / "sst2"
         train_path, test_path = path / "sst2_train.npz", path / "sst2_test.npz"
-        if not train_path.exists() or not test_path.exists():
+        if not train_path.exists() or (not config.development_manifest and not test_path.exists()):
             raise FileNotFoundError("Prepare SST-2 first: python datasets/sst2/prepare_data.py")
         with np.load(train_path, allow_pickle=False) as arrays:
             if "source_sha256" not in arrays:
@@ -182,17 +184,22 @@ def load_data(config, preprocessing=None):
             inputs = torch.from_numpy(arrays["X"].astype(np.int64))
             labels = torch.from_numpy(arrays["y"].astype(np.int64))
             source_hash = str(arrays["source_sha256"].item())
-        with np.load(test_path, allow_pickle=False) as arrays:
-            test = TensorDataset(torch.from_numpy(arrays["X"].astype(np.int64)),
-                                 torch.from_numpy(arrays["y"].astype(np.int64)))
-        split = load_manifest(_manifest_path(config), dataset_id="glue/sst2", source_size=len(labels),
-                              source_sha256=source_hash)
+        test = None
+        if not config.development_manifest:
+            with np.load(test_path, allow_pickle=False) as arrays:
+                test = TensorDataset(torch.from_numpy(arrays["X"].astype(np.int64)),
+                                     torch.from_numpy(arrays["y"].astype(np.int64)))
+        parent = load_manifest(_manifest_path(config), dataset_id="glue/sst2", source_size=len(labels),
+                               source_sha256=source_hash)
+        split = development_split(config, parent) if config.development_manifest else parent
         source = TensorDataset(inputs, labels)
         # Bind prepared tokens as well as the original raw-source fingerprint.
         token_hash = hashlib.sha256(inputs.numpy().tobytes() + labels.numpy().tobytes()).hexdigest()
-        test_hash = hashlib.sha256(test.tensors[0].numpy().tobytes() + test.tensors[1].numpy().tobytes()).hexdigest()
         actual = {"tokenizer": "roberta-base", "max_length": inputs.shape[1],
-                  "training_arrays_sha256": token_hash, "test_arrays_sha256": test_hash}
+                  "training_arrays_sha256": token_hash}
+        if test is not None:
+            actual["test_arrays_sha256"] = hashlib.sha256(
+                test.tensors[0].numpy().tobytes() + test.tensors[1].numpy().tobytes()).hexdigest()
         if preprocessing is not None and actual != preprocessing:
             raise ValueError("SST-2 prepared arrays changed since this run was initialized")
         bundle = DataBundle(Subset(source, split["train_indices"]), Subset(source, split["val_indices"]),

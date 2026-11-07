@@ -53,7 +53,7 @@ class Config:
     def validate(self):
         choices = {
             "dataset": ("cifar10", "cifar100", "sst2", "synthetic"),
-            "model": ("vit_b_16", "hf_vit", "resnet50", "roberta", "tiny_vit", "tiny_roberta"),
+            "model": ("vit_b_16", "hf_vit", "resnet50", "densenet121", "roberta", "tiny_vit", "tiny_roberta"),
             "sequence_strategy": ("cyclic", "bms", "random"),
             "scaling": ("lora", "rslora"),
             "head_policy": ("snapshot", "first_slice"),
@@ -98,8 +98,8 @@ class Config:
             raise ValueError("pretrained and deterministic must be booleans")
         if self.dataset == "sst2" and self.model not in ("roberta", "tiny_roberta"):
             raise ValueError("sst2 requires a RoBERTa model")
-        if self.dataset.startswith("cifar") and self.model not in ("vit_b_16", "hf_vit", "resnet50"):
-            raise ValueError("CIFAR experiments require vit_b_16, hf_vit, or resnet50")
+        if self.dataset.startswith("cifar") and self.model not in ("vit_b_16", "hf_vit", "resnet50", "densenet121"):
+            raise ValueError("CIFAR experiments require an image model")
         if self.dataset == "synthetic" and self.model not in ("tiny_vit", "tiny_roberta"):
             raise ValueError("synthetic is an offline fixture for tiny models only")
         if self.model.startswith("tiny_") and self.pretrained:
@@ -110,10 +110,10 @@ class Config:
         if (self.development_manifest is None) != (self.development_pool is None):
             raise ValueError("development_manifest and development_pool must be set together")
         if self.development_manifest is not None:
-            if (self.dataset not in ("cifar10", "cifar100") or self.split_manifest is None
+            if (self.dataset not in ("cifar10", "cifar100", "sst2") or self.split_manifest is None
                     or self.development_pool not in ("scoring", "confirmation")
                     or self.max_train_examples is not None or self.max_eval_examples is not None):
-                raise ValueError("Development search requires explicit CIFAR manifests and no caps")
+                raise ValueError("Development search requires explicit source manifests and no caps")
         return self
 
     def to_dict(self):

@@ -1,0 +1,56 @@
+{
+  "dataset": "sst2",
+  "model": "roberta",
+  "parent_manifest": "configs/manifests/glue-sst2-val6734-seed42.json",
+  "development_manifest": "configs/manifests/glue-sst2-dev6734-fit60-score20-confirm20-seed42.json",
+  "shard_bands": [
+    [
+      20
+    ]
+  ],
+  "slices": [
+    2,
+    3,
+    4,
+    6
+  ],
+  "sequence_budgets": [
+    1,
+    2,
+    3,
+    4,
+    6
+  ],
+  "epochs_per_slice": [
+    1,
+    3,
+    5,
+    10
+  ],
+  "learning_rates": [
+    0.0001,
+    0.0003,
+    0.001,
+    0.002
+  ],
+  "screening_trials": 24,
+  "max_members": 80,
+  "max_training_work_ratio": 30,
+  "finalists_per_band": 3,
+  "screen_seed": 1,
+  "confirmation_seeds": [
+    1,
+    2,
+    3
+  ],
+  "search_seed": 1729,
+  "batch_size": 32,
+  "rank": 16,
+  "alpha": 32,
+  "lora_dropout": 0.1,
+  "head_policy": "first_slice",
+  "sequence_strategy": "cyclic",
+  "num_workers": 4,
+  "minimum_free_gb": 20,
+  "maximum_gpu_power_watts": null
+}

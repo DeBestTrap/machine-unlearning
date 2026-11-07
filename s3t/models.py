@@ -43,6 +43,16 @@ def build_backbone(config, num_classes, saved_spec=None):
         nn.init.zeros_(model.fc.bias)
         spec = {"kind": "torchvision_resnet", "model": "resnet50", "num_classes": num_classes,
                 "weights": "IMAGENET1K_V2" if config.pretrained else None}
+    elif config.model == "densenet121":
+        from torchvision.models import DenseNet121_Weights, densenet121
+        if saved_spec is not None and saved_spec.get("weights") not in (None, "IMAGENET1K_V1"):
+            raise ValueError("densenet121 currently supports IMAGENET1K_V1 weights")
+        model = densenet121(weights=DenseNet121_Weights.IMAGENET1K_V1 if pretrained else None)
+        model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+        nn.init.xavier_uniform_(model.classifier.weight)
+        nn.init.zeros_(model.classifier.bias)
+        spec = {"kind": "torchvision_densenet", "model": "densenet121", "num_classes": num_classes,
+                "weights": "IMAGENET1K_V1" if config.pretrained else None}
     else:
         from transformers import RobertaConfig, RobertaForSequenceClassification
         name = config.model_name or "roberta-base"

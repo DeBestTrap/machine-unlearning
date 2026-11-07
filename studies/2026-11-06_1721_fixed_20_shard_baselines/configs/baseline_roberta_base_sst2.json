@@ -1,0 +1,62 @@
+{
+  "model": "roberta",
+  "dataset": "sst2",
+  "source_root": ".",
+  "parent_manifest": "studies/2026-11-06_1721_fixed_20_shard_baselines/configs/manifests/glue-sst2-val6734-seed42.json",
+  "development_manifest": "studies/2026-11-06_1721_fixed_20_shard_baselines/configs/manifests/glue-sst2-dev6734-fit60-score20-confirm20-seed42.json",
+  "trials": 100,
+  "shards": [
+    20
+  ],
+  "slices": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    8
+  ],
+  "epochs": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "lr_bounds": [
+    1e-05,
+    0.001
+  ],
+  "cost_budgets": [
+    0.1,
+    0.25,
+    0.5
+  ],
+  "reference_epochs": 1,
+  "search_seed": 1729,
+  "training_seed": 1,
+  "confirmation_seeds": [
+    1,
+    2,
+    3
+  ],
+  "finalists_per_method_budget": 3,
+  "batch_size": 32,
+  "optimizer": "adamw",
+  "dropout_rate": 0.1,
+  "threads": 4,
+  "maximum_gpu_power_watts": null,
+  "minimum_free_gb": 20,
+  "checkpoint_retention": "scores_only",
+  "model_args": {
+    "layers_to_finetune": [
+      "classifier.",
+      "roberta.encoder.layer."
+    ]
+  }
+}
