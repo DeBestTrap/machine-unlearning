@@ -50,6 +50,14 @@ under this study's `runs/<run-name>/`.
 From the repository root, these commands validate manifests and write plans;
 they do **not** train models:
 
+For SST-2, first run `python datasets/sst2/prepare_data.py`. The preparation
+script loads `nyu-mll/glue` with the `sst2` configuration and writes the original
+ordered RoBERTa token arrays to `datasets/sst2/sst2_train.npz`, including the raw
+source fingerprint. Having only the dataset scripts or a Hugging Face cache is
+not sufficient. S3T's `--data-root` points to the repository root containing
+`datasets/`, not to `datasets/` itself. The searches consume the original training
+arrays and their fixed 10% manifests; they do not load `sst2_test.npz`.
+
 ```bash
 bash studies/2026-11-06_1721_fixed_20_shard_baselines/run.sh baseline prepare \
   --config studies/2026-11-06_1721_fixed_20_shard_baselines/configs/baseline_resnet50_cifar10.json \

@@ -32,7 +32,7 @@ def _to_arrays(split):
 
 
 def main():
-    dataset = load_dataset("glue", "sst2")
+    dataset = load_dataset("nyu-mll/glue", "sst2")
     tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME)
 
     source_sha256 = fingerprint_records(

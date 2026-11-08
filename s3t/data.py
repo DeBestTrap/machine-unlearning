@@ -177,7 +177,12 @@ def load_data(config, preprocessing=None):
         path = root / "datasets" / "sst2"
         train_path, test_path = path / "sst2_train.npz", path / "sst2_test.npz"
         if not train_path.exists() or (not config.development_manifest and not test_path.exists()):
-            raise FileNotFoundError("Prepare SST-2 first: python datasets/sst2/prepare_data.py")
+            missing = train_path if not train_path.exists() else test_path
+            raise FileNotFoundError(
+                f"Missing tokenized SST-2 file: {missing}. data_root must point to the "
+                "machine-unlearning repository root (the directory containing datasets/). "
+                "A raw Hugging Face dataset/cache is not the prepared NPZ file. "
+                "From that repository, run: python datasets/sst2/prepare_data.py")
         with np.load(train_path, allow_pickle=False) as arrays:
             if "source_sha256" not in arrays:
                 raise ValueError("SST-2 arrays predate verified source provenance; prepare them again")

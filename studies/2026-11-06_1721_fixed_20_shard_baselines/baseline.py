@@ -154,6 +154,11 @@ def prepare(args):
     if settings["dataset"] == "sst2":
         import numpy as np
         path = Path(settings["source_root"]) / "datasets/sst2/sst2_train.npz"
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"Missing tokenized SST-2 file: {path.resolve()}. source_root must point to "
+                "the directory containing datasets/. From machine-unlearning, run: "
+                "python datasets/sst2/prepare_data.py")
         with np.load(path, allow_pickle=False) as arrays:
             settings["training_tokens_sha256"] = sha256(
                 arrays["X"].astype(np.int64).tobytes() + arrays["y"].astype(np.int64).tobytes()).hexdigest()
